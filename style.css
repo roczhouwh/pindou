@@ -5,6 +5,9 @@
 /* --- Reset & Base --- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* 确保 [hidden] 始终生效，不被带 display 的 class 覆盖 */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #FAFAFA;
   --surface: #FFFFFF;
@@ -211,6 +214,23 @@ body {
   letter-spacing: 0.05em;
 }
 
+.aspect-lock-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.aspect-lock-label input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 .grid-sizes {
   display: flex;
   gap: 6px;
@@ -271,6 +291,26 @@ body {
 .custom-x {
   font-size: 14px;
   color: var(--text-muted);
+}
+
+/* --- Simplify Control --- */
+.simplify-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simplify-control input[type="range"] {
+  width: 100px;
+  accent-color: var(--primary);
+}
+
+.simplify-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Buttons --- */

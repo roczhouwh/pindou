@@ -30,6 +30,9 @@ const downloadCanvas = $('#downloadCanvas');
 const customW = $('#customW');
 const customH = $('#customH');
 const applyCustom = $('#applyCustom');
+const simplifySlider = $('#simplifySlider');
+const simplifyValue = $('#simplifyValue');
+const aspectLock = $('#aspectLock');
 
 // ----- 状态 -----
 const state = {
@@ -44,6 +47,10 @@ const state = {
   // 网格尺寸
   gridW: 29,
   gridH: 29,
+  // 保持选框比例
+  aspectLock: true,
+  // 颜色简化 0-100, 0=关闭
+  simplify: 0,
   // 生成的网格数据
   gridData: null,
   colorCounts: null,
@@ -349,6 +356,7 @@ document.addEventListener('pointerup', (e) => {
     state.dragHandle = null;
     viewerHint.hidden = true;
     viewerHint2.hidden = true;
+    syncGridAspect();
     generateGrid();
   }
   if (state.isPanning) {
@@ -397,6 +405,7 @@ $$('.grid-btn').forEach((btn) => {
     btn.classList.add('active');
     state.gridW = parseInt(btn.dataset.w);
     state.gridH = parseInt(btn.dataset.h);
+    syncGridAspect(); // 保持比例时自动调整 gridH
     customW.value = '';
     customH.value = '';
     generateGrid();
@@ -406,17 +415,77 @@ $$('.grid-btn').forEach((btn) => {
 applyCustom.addEventListener('click', () => {
   const w = parseInt(customW.value);
   const h = parseInt(customH.value);
-  if (w >= 15 && w <= 104 && h >= 15 && h <= 104) {
+  const hasW = !isNaN(w) && w >= 15 && w <= 104;
+  const hasH = !isNaN(h) && h >= 15 && h <= 104;
+
+  if (!hasW && !hasH) return;
+  if (!hasW && hasH) {
+    // 只填了高度：由高度反算宽度
+    state.gridH = h;
+    state.gridW = Math.round(h * state.selection.w / state.selection.h);
+  } else if (hasW && !hasH) {
+    // 只填了宽度：由宽度算高度
+    state.gridW = w;
+    syncGridAspect();
+  } else {
     state.gridW = w;
     state.gridH = h;
-    $$('.grid-btn').forEach((b) => b.classList.remove('active'));
-    generateGrid();
+  }
+  $$('.grid-btn').forEach((b) => b.classList.remove('active'));
+  generateGrid();
+});
+
+// 保持比例复选框
+aspectLock.addEventListener('change', () => {
+  state.aspectLock = aspectLock.checked;
+  if (state.aspectLock && state.image) {
+    syncGridAspect();
+  } else if (!state.aspectLock && state.image) {
+    // 取消勾选：恢复当前预设按钮的原始尺寸
+    const activeBtn = $('.grid-btn.active');
+    if (activeBtn) {
+      state.gridW = parseInt(activeBtn.dataset.w);
+      state.gridH = parseInt(activeBtn.dataset.h);
+    }
+  }
+  if (state.image) generateGrid();
+});
+
+// 颜色简化滑块
+simplifySlider.addEventListener('input', () => {
+  const val = parseInt(simplifySlider.value);
+  state.simplify = val;
+  simplifyValue.textContent = val === 0 ? '关闭' : `${val}%`;
+  if (state.rawGridData) {
+    applySimplify();
+    renderPreview();
+    renderStats();
   }
 });
 
 // ============================================================
+// ============================================================
 // 5. 网格生成 + 色板映射
 // ============================================================
+
+/** 根据选框宽高比同步 gridH（以 gridW 为基准），clamp 到 15-104 */
+function syncGridAspect() {
+  if (!state.aspectLock || !state.image) return;
+  const sel = state.selection;
+  if (sel.w <= 0 || sel.h <= 0) return;
+
+  const selAspect = sel.w / sel.h;
+  let gw = state.gridW;
+  let gh = Math.round(gw / selAspect);
+
+  // Clamp 高度，溢出则反算宽度
+  if (gh < 15) { gh = 15; gw = Math.round(15 * selAspect); }
+  if (gh > 104) { gh = 104; gw = Math.round(104 * selAspect); }
+  gw = Math.max(15, Math.min(104, gw));
+
+  state.gridW = gw;
+  state.gridH = gh;
+}
 
 function generateGrid() {
   if (!state.image) return;
@@ -462,31 +531,153 @@ function generateGrid() {
       // 平均色
       let r = 0, g = 0, b = 0, count = 0;
       for (let i = 0; i < imageData.data.length; i += 4) {
+        const alpha = imageData.data[i + 3];
+        if (alpha < 128) continue; // 透明/半透明像素跳过
         r += imageData.data[i];
         g += imageData.data[i + 1];
         b += imageData.data[i + 2];
         count++;
       }
 
-      const avg = { r: Math.round(r / count), g: Math.round(g / count), b: Math.round(b / count) };
-      const nearest = findNearestColor(avg);
-      grid[row][col] = nearest;
+      if (count === 0) {
+        // 整格全透明，标记为空
+        grid[row][col] = null;
+      } else {
+        const avg = { r: Math.round(r / count), g: Math.round(g / count), b: Math.round(b / count) };
+        const nearest = findNearestColor(avg);
+        grid[row][col] = nearest;
 
-      // 统计
-      const key = nearest.hex;
-      if (!colorMap.has(key)) {
-        colorMap.set(key, { ...nearest, count: 0 });
+        // 统计（空格不计入）
+        const key = nearest.hex;
+        if (!colorMap.has(key)) {
+          colorMap.set(key, { ...nearest, count: 0 });
+        }
+        colorMap.get(key).count++;
       }
-      colorMap.get(key).count++;
     }
   }
 
-  state.gridData = grid;
-  state.colorCounts = Array.from(colorMap.values()).sort((a, b) => b.count - a.count);
+  // 保存原始映射数据（颜色简化用）
+  state.rawGridData = grid.map(r => r.map(c => c ? { ...c } : null));
+  state.rawColorCounts = Array.from(colorMap.values()).map(c => ({ ...c }));
+
+  // 应用颜色简化
+  if (state.simplify > 0) {
+    applySimplify();
+  } else {
+    state.gridData = state.rawGridData;
+    state.colorCounts = state.rawColorCounts;
+  }
 
   renderPreview();
   renderStats();
   downloadBtn.disabled = false;
+}
+
+// ============================================================
+// 5.5 颜色简化 — 合并映射后的相近颜色
+// ============================================================
+
+/** 从 gridData 重建 colorCounts */
+function rebuildColorCounts(grid) {
+  const map = new Map();
+  for (const row of grid) {
+    for (const cell of row) {
+      if (!cell) continue;
+      const key = cell.hex;
+      if (!map.has(key)) map.set(key, { ...cell, count: 0 });
+      map.get(key).count++;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+/** 基于 rawGridData 重新计算简化后的 gridData 和 colorCounts */
+function applySimplify() {
+  const threshold = state.simplify;
+  const raw = state.rawGridData;
+  if (!raw) return;
+
+  if (threshold <= 0) {
+    state.gridData = state.rawGridData;
+    state.colorCounts = state.rawColorCounts;
+    return;
+  }
+
+  // 将简化值 0-100 映射到平方距离阈值
+  // 100 → 5000（≈ RGB 每通道差 ~40，相当激进）
+  const maxDistSq = (threshold / 100) * 5000;
+  if (maxDistSq <= 0) return;
+
+  const rows = raw.length;
+  const cols = raw[0].length;
+
+  // 深拷贝一份原始网格
+  const grid = raw.map(r => r.map(c => c ? { ...c } : null));
+
+  // 统计颜色频率（从原始数据）
+  const freq = new Map();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = raw[r][c];
+      if (!cell) continue;
+      const key = cell.hex;
+      freq.set(key, (freq.get(key) || 0) + 1);
+    }
+  }
+
+  // 按频率降序排列颜色
+  const sorted = [...freq.entries()]
+    .map(([hex, count]) => ({ hex, count, color: PERLER_PALETTE.find(p => p.hex === hex) }))
+    .filter(x => x.color)
+    .sort((a, b) => b.count - a.count);
+
+  // 从低频到高频，为每个颜色找更常见的相近色进行合并
+  const mergeMap = new Map(); // source hex → target hex
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const src = sorted[i];
+    let bestDist = Infinity;
+    let bestTarget = null;
+
+    for (let j = 0; j < i; j++) {
+      const tgt = sorted[j];
+      const d = colorDistance(src.color, tgt.color);
+      if (d < bestDist) {
+        bestDist = d;
+        bestTarget = tgt;
+      }
+    }
+
+    if (bestTarget && bestDist <= maxDistSq) {
+      mergeMap.set(src.hex, bestTarget.hex);
+    }
+  }
+
+  // 解析合并链：A→B, B→C => A→C
+  for (const [src, tgt] of mergeMap) {
+    let resolved = tgt;
+    const seen = new Set([src]);
+    while (mergeMap.has(resolved) && !seen.has(resolved)) {
+      seen.add(resolved);
+      resolved = mergeMap.get(resolved);
+    }
+    mergeMap.set(src, resolved);
+  }
+
+  // 执行合并
+  const paletteMap = new Map(PERLER_PALETTE.map(p => [p.hex, p]));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = grid[r][c];
+      if (cell && mergeMap.has(cell.hex)) {
+        const tgt = paletteMap.get(mergeMap.get(cell.hex));
+        if (tgt) grid[r][c] = tgt;
+      }
+    }
+  }
+
+  state.gridData = grid;
+  state.colorCounts = rebuildColorCounts(grid);
 }
 
 // ============================================================
@@ -519,11 +710,28 @@ function renderPreview() {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  // 第一遍：填充所有格子
+  // 第一遍：填充所有格子（空格子留白）
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      ctx.fillStyle = grid[row][col].hex;
+      const cell = grid[row][col];
+      ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
       ctx.fillRect(padding + col * cellSize, padding + row * cellSize, cellSize, cellSize);
+    }
+  }
+  // 空格子画斜线标记
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (grid[row][col]) continue;
+      const x = padding + col * cellSize;
+      const y = padding + row * cellSize;
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + cellSize, y + cellSize);
+      ctx.moveTo(x + cellSize, y);
+      ctx.lineTo(x, y + cellSize);
+      ctx.stroke();
     }
   }
   // 第二遍：统一绘制网格线（避免同色格子覆盖边框）
@@ -542,7 +750,7 @@ function renderPreview() {
     ctx.stroke();
   }
 
-  // 第三遍：绘制色号文字（深色格子白字，浅色格子黑字）
+  // 第三遍：绘制色号文字（空格子跳过）
   const minCellForText = 10;
   if (cellSize >= minCellForText) {
     const fontSize = Math.max(5, cellSize * 0.35);
@@ -552,6 +760,7 @@ function renderPreview() {
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const c = grid[row][col];
+        if (!c) continue;
         const cx = padding + col * cellSize + cellSize / 2;
         const cy = padding + row * cellSize + cellSize / 2;
         const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
@@ -641,10 +850,11 @@ function downloadPNG() {
   const gridX = (canvasW - cols * cellSize) / 2;
   const gridY = padding + titleHeight;
 
-  // 第一遍：填充所有格子
+  // 第一遍：填充所有格子（空格子留白）
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      ctx.fillStyle = grid[row][col].hex;
+      const cell = grid[row][col];
+      ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
       ctx.fillRect(gridX + col * cellSize, gridY + row * cellSize, cellSize, cellSize);
     }
   }
@@ -672,6 +882,7 @@ function downloadPNG() {
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const c = grid[row][col];
+      if (!c) continue;
       const cx = gridX + col * cellSize + cellSize / 2;
       const cy = gridY + row * cellSize + cellSize / 2;
       const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
@@ -733,6 +944,13 @@ $('#resetBtn').addEventListener('click', () => {
   state.image = null;
   state.gridData = null;
   state.colorCounts = null;
+  state.rawGridData = null;
+  state.rawColorCounts = null;
+  state.aspectLock = true;
+  aspectLock.checked = true;
+  // 清空画布，避免残留旧图片
+  viewerCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
+  selectionBox.hidden = true;
   uploadSection.hidden = false;
   viewerSection.hidden = true;
   controlsSection.hidden = true;

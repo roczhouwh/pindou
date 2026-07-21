@@ -69,6 +69,9 @@
             <button class="grid-btn" data-w="78" data-h="78">78×78</button>
             <button class="grid-btn" data-w="104" data-h="104">104×104</button>
           </div>
+          <label class="aspect-lock-label">
+            <input type="checkbox" id="aspectLock" checked> 保持选框比例
+          </label>
         </div>
         <div class="control-group custom-size">
           <label class="control-label">自定义</label>
@@ -77,6 +80,13 @@
             <span class="custom-x">×</span>
             <input type="number" id="customH" min="15" max="104" placeholder="高" class="custom-input">
             <button id="applyCustom" class="btn btn-sm">应用</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="control-label">颜色简化</label>
+          <div class="simplify-control">
+            <input type="range" id="simplifySlider" min="0" max="100" value="0">
+            <span class="simplify-value" id="simplifyValue">关闭</span>
           </div>
         </div>
         <div class="control-group">
