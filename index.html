@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>拼豆图纸生成器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>拼豆图纸生成器</h1>
+    <span class="subtitle">上传图片 → 框选区域 → 生成图纸</span>
+  </header>
+
+  <main class="main">
+
+    <!-- ====== 上传区 ====== -->
+    <section class="upload-section" id="uploadSection">
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+        <div class="upload-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="upload-text">拖拽图片到此处，或 <strong>点击上传</strong></p>
+        <p class="upload-hint">支持 JPG / PNG / WebP，最大 20MB</p>
+      </div>
+      <p class="upload-error" id="uploadError" hidden></p>
+    </section>
+
+    <!-- ====== 图片查看器 ====== -->
+    <section class="viewer-section" id="viewerSection" hidden>
+      <div class="viewer-toolbar">
+        <button class="btn btn-sm" id="resetBtn">🔄 重新上传</button>
+      </div>
+      <div class="viewer-wrapper" id="viewerWrapper">
+        <canvas id="viewerCanvas"></canvas>
+        <!-- 矩形选框覆盖层 -->
+        <div class="selection-overlay" id="selectionOverlay">
+          <div class="selection-box" id="selectionBox" hidden>
+            <!-- 8 个控制手柄 -->
+            <div class="handle nw" data-handle="nw"></div>
+            <div class="handle n" data-handle="n"></div>
+            <div class="handle ne" data-handle="ne"></div>
+            <div class="handle w" data-handle="w"></div>
+            <div class="handle e" data-handle="e"></div>
+            <div class="handle sw" data-handle="sw"></div>
+            <div class="handle s" data-handle="s"></div>
+            <div class="handle se" data-handle="se"></div>
+          </div>
+        </div>
+      </div>
+      <p class="viewer-hint" id="viewerHint">✨ 在图片上拖拽框选目标区域</p>
+      <p class="viewer-hint" id="viewerHint2">🖱 滚轮缩放 · 右键拖拽平移（或拖拽空白区域）</p>
+    </section>
+
+    <!-- ====== 控制栏 ====== -->
+    <section class="controls-section" id="controlsSection" hidden>
+      <div class="controls">
+        <div class="control-group">
+          <label class="control-label">网格尺寸</label>
+          <div class="grid-sizes">
+            <button class="grid-btn active" data-w="29" data-h="29">29×29</button>
+            <button class="grid-btn" data-w="52" data-h="52">52×52</button>
+            <button class="grid-btn" data-w="78" data-h="78">78×78</button>
+            <button class="grid-btn" data-w="104" data-h="104">104×104</button>
+          </div>
+        </div>
+        <div class="control-group custom-size">
+          <label class="control-label">自定义</label>
+          <div class="custom-inputs">
+            <input type="number" id="customW" min="15" max="104" placeholder="宽" class="custom-input">
+            <span class="custom-x">×</span>
+            <input type="number" id="customH" min="15" max="104" placeholder="高" class="custom-input">
+            <button id="applyCustom" class="btn btn-sm">应用</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <button id="downloadBtn" class="btn btn-primary" disabled>📥 下载 PNG</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 图纸预览 ====== -->
+    <section class="preview-section" id="previewSection" hidden>
+      <h2 class="section-title">图纸预览</h2>
+      <div class="preview-container">
+        <canvas id="previewCanvas" class="preview-canvas"></canvas>
+      </div>
+      <p class="preview-info" id="previewInfo"></p>
+    </section>
+
+    <!-- ====== 颜色统计 ====== -->
+    <section class="stats-section" id="statsSection" hidden>
+      <h2 class="section-title">颜色统计</h2>
+      <div class="stats-table-wrapper">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>颜色</th>
+              <th>名称</th>
+              <th>色号</th>
+              <th>数量</th>
+            </tr>
+          </thead>
+          <tbody id="statsBody"></tbody>
+          <tfoot id="statsFoot"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- ====== 隐藏画布用于像素采样 ====== -->
+    <canvas id="offscreenCanvas" hidden></canvas>
+    <!-- ====== 隐藏画布用于下载合成 ====== -->
+    <canvas id="downloadCanvas" hidden></canvas>
+
+  </main>
+
+  <script src="color-palette.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

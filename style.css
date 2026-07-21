@@ -1,0 +1,420 @@
+/* ============================================================
+   拼豆图纸生成器 — 样式
+   ============================================================ */
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #FAFAFA;
+  --surface: #FFFFFF;
+  --border: #E5E5E5;
+  --text: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --primary: #6366F1;
+  --primary-hover: #4F46E5;
+  --primary-light: #EEF2FF;
+  --danger: #EF4444;
+  --selection: #6366F1;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* --- Header --- */
+.header {
+  text-align: center;
+  padding: 32px 16px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* --- Main Layout --- */
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* --- Upload Zone --- */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.upload-icon {
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  display: inline-flex;
+}
+
+.upload-text {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.upload-text strong {
+  color: var(--primary);
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.upload-error {
+  color: var(--danger);
+  font-size: 14px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* --- Viewer --- */
+.viewer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.viewer-toolbar {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.viewer-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 500px;
+  background: #FAFAFA;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  cursor: crosshair;
+}
+
+.viewer-wrapper.panning {
+  cursor: grabbing;
+}
+
+#viewerCanvas {
+  display: block;
+}
+
+.selection-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px dashed var(--selection);
+  background: rgba(99, 102, 241, 0.08);
+  pointer-events: auto;
+  cursor: move;
+}
+
+/* 8 控制手柄 */
+.handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border: 2px solid var(--selection);
+  border-radius: 50%;
+  pointer-events: auto;
+}
+
+.handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+.handle.n  { top: -6px; left: 50%; margin-left: -6px; cursor: n-resize; }
+.handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+.handle.w  { top: 50%; margin-top: -6px; left: -6px; cursor: w-resize; }
+.handle.e  { top: 50%; margin-top: -6px; right: -6px; cursor: e-resize; }
+.handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+.handle.s  { bottom: -6px; left: 50%; margin-left: -6px; cursor: s-resize; }
+.handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+
+.viewer-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* --- Controls --- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 20px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.control-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.grid-sizes {
+  display: flex;
+  gap: 6px;
+}
+
+.grid-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+  font-family: var(--font);
+}
+
+.grid-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.grid-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.custom-size {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-inputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.custom-input {
+  width: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  font-family: var(--font);
+  outline: none;
+}
+
+.custom-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+
+.custom-x {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* --- Buttons --- */
+.btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font);
+}
+
+.btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  padding: 10px 24px;
+  font-size: 15px;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: white;
+}
+
+.btn-primary:disabled {
+  background: var(--text-muted);
+  border-color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* --- Preview --- */
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.preview-container {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.preview-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.preview-info {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* --- Stats --- */
+.stats-table-wrapper {
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #FAFAFA;
+}
+
+.stats-table tbody tr:hover {
+  background: var(--primary-light);
+}
+
+.stats-table tfoot td {
+  font-weight: 600;
+  background: #FAFAFA;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.1);
+  vertical-align: middle;
+}
+
+.color-name {
+  font-weight: 500;
+}
+
+.color-hex {
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.color-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Responsive --- */
+@media (max-width: 640px) {
+  .header h1 { font-size: 22px; }
+  .main { padding: 16px 12px 48px; gap: 16px; }
+  .viewer-wrapper { height: 350px; }
+  .controls { flex-direction: column; align-items: center; padding: 16px; }
+  .grid-btn { padding: 5px 10px; font-size: 13px; }
+}
