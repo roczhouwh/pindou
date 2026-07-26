@@ -360,22 +360,42 @@ body {
   font-size: 13px;
 }
 
-.btn-camera {
+/* --- 手机端双按钮上传 --- */
+.upload-buttons {
   display: none;
-  align-items: center;
-  gap: 6px;
-  margin-top: 16px;
-  padding: 10px 20px;
-  font-size: 15px;
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
+  gap: 12px;
+  width: 100%;
 }
 
-.btn-camera:hover {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
-  color: white;
+.upload-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.upload-btn svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.upload-btn:active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  transform: scale(0.97);
 }
 
 /* --- Camera Overlay --- */
@@ -691,8 +711,10 @@ body {
   .custom-input { width: 40px; }
 }
 
-/* 触摸设备：放大选框手柄 */
+/* 触摸设备：放大选框手柄 + 双按钮上传 */
 @media (pointer: coarse) {
+  .upload-zone { display: none; }
+  .upload-buttons { display: flex; }
   .handle {
     width: 22px;
     height: 22px;

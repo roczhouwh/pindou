@@ -92,6 +92,11 @@ fileInput.addEventListener('change', (e) => {
   if (e.target.files.length > 0) handleFile(e.target.files[0]);
 });
 
+$('#galleryBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  fileInput.click();
+});
+
 cameraBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   openCamera();
