@@ -569,9 +569,26 @@ body {
     overflow: visible;
   }
   .control-group { flex-shrink: 1; width: 100%; }
+  .control-group.simplify-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .control-group.simplify-group .control-label {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   .grid-btn { padding: 8px 12px; font-size: 13px; flex: 1; text-align: center; }
   .grid-sizes { gap: 4px; display: flex; width: 100%; }
-  .custom-size { flex-direction: column; align-items: stretch; }
+  .custom-size {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .custom-size .control-label {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   .custom-inputs { justify-content: center; }
   .simplify-control { justify-content: center; }
   .upload-zone { padding: 32px 16px; }

@@ -777,7 +777,6 @@ function renderPreview() {
   previewCanvas.width = canvasW * dpr;
   previewCanvas.height = canvasH * dpr;
   previewCanvas.style.width = canvasW + 'px';
-  previewCanvas.style.height = canvasH + 'px';
 
   const ctx = previewCanvas.getContext('2d');
   ctx.scale(dpr, dpr);
