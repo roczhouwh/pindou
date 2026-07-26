@@ -283,6 +283,7 @@ function updateSelectionBox() {
 viewerWrapper.addEventListener('pointerdown', (e) => {
   if (e.button === 2) return; // 右键留给平移
   if (e.target.classList.contains('handle')) return; // 手柄拖拽
+  e.preventDefault(); // 阻止浏览器默认触摸行为（滚动/下拉刷新）
 
   const coords = getImageCoords(e.clientX, e.clientY);
   if (!coords.inImage) return;

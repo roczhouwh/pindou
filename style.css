@@ -137,6 +137,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   cursor: crosshair;
+  touch-action: none;
 }
 
 .viewer-wrapper.panning {
@@ -159,6 +160,7 @@ body {
   background: rgba(99, 102, 241, 0.08);
   pointer-events: auto;
   cursor: move;
+  touch-action: none;
 }
 
 /* 8 控制手柄 */
