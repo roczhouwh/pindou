@@ -94,12 +94,84 @@ fileInput.addEventListener('change', (e) => {
 
 cameraBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  cameraInput.click();
+  openCamera();
 });
 
-cameraInput.addEventListener('change', (e) => {
-  if (e.target.files.length > 0) handleFile(e.target.files[0]);
-});
+// 通过 getUserMedia 直接调用相机
+let cameraStream = null;
+
+function openCamera() {
+  // 创建相机覆盖层
+  let overlay = document.getElementById('cameraOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'cameraOverlay';
+    overlay.className = 'camera-overlay';
+    overlay.innerHTML = `
+      <div class="camera-viewport">
+        <video id="cameraVideo" autoplay playsinline></video>
+        <div class="camera-toolbar">
+          <button class="btn btn-capture" id="cameraCaptureBtn">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="7" fill="currentColor"/>
+            </svg>
+          </button>
+          <button class="btn btn-close-camera" id="cameraCloseBtn">✕</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#cameraCaptureBtn').addEventListener('click', capturePhoto);
+    overlay.querySelector('#cameraCloseBtn').addEventListener('click', closeCamera);
+  }
+
+  // 启动相机
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+    }).then((stream) => {
+      cameraStream = stream;
+      const video = document.getElementById('cameraVideo');
+      video.srcObject = stream;
+      overlay.hidden = false;
+    }).catch(() => {
+      // getUserMedia 失败，回退到文件输入
+      cameraInput.click();
+    });
+  } else {
+    cameraInput.click();
+  }
+}
+
+function capturePhoto() {
+  const video = document.getElementById('cameraVideo');
+  if (!video || !video.videoWidth) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      closeCamera();
+      handleFile(file);
+    }
+  }, 'image/jpeg', 0.92);
+}
+
+function closeCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  const overlay = document.getElementById('cameraOverlay');
+  if (overlay) overlay.hidden = true;
+}
 
 uploadZone.addEventListener('dragover', (e) => {
   e.preventDefault();
