@@ -107,6 +107,7 @@ cameraBtn.addEventListener('click', (e) => {
 cameraInput.addEventListener('change', (e) => {
   if (e.target.files.length > 0) handleFile(e.target.files[0]);
   cameraInput.value = ''; // 允许重复选择同一文件
+});
 
 // 通过 getUserMedia 直接调用相机
 let cameraStream = null;
