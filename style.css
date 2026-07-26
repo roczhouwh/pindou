@@ -357,6 +357,110 @@ body {
   font-size: 13px;
 }
 
+.btn-camera {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 10px 20px;
+  font-size: 15px;
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.btn-camera:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: white;
+}
+
+.btn-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* --- Loading Spinner --- */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text {
+  color: white;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* --- Install Banner --- */
+.install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 500;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+
+.install-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.install-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  white-space: nowrap;
+}
+
+.install-btn:hover {
+  background: var(--primary-hover);
+}
+
+.install-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  line-height: 1;
+}
+
 /* --- Preview --- */
 .section-title {
   font-size: 18px;
@@ -453,8 +557,80 @@ body {
 /* --- Responsive --- */
 @media (max-width: 640px) {
   .header h1 { font-size: 22px; }
+  .header { padding: 24px 12px 16px; }
   .main { padding: 16px 12px 48px; gap: 16px; }
-  .viewer-wrapper { height: 350px; }
-  .controls { flex-direction: column; align-items: center; padding: 16px; }
+  .viewer-wrapper { height: min(400px, 60vh); }
+  .controls {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .controls::-webkit-scrollbar { display: none; }
+  .control-group { flex-shrink: 0; }
   .grid-btn { padding: 5px 10px; font-size: 13px; }
+  .grid-sizes { gap: 4px; }
+  .upload-zone { padding: 32px 16px; }
+  .upload-text { font-size: 14px; }
+  .upload-hint { font-size: 12px; }
+  .preview-container { margin: 0 -8px; border-radius: 0; }
+  .stats-table th,
+  .stats-table td { padding: 8px 10px; font-size: 13px; }
+  .color-swatch { width: 20px; height: 20px; }
+  .viewer-hint { font-size: 12px; }
+  .section-title { font-size: 16px; }
+  .custom-input { width: 48px; font-size: 13px; }
+  .simplify-control input[type="range"] { width: 80px; }
+}
+
+/* 小屏手机 (<400px) */
+@media (max-width: 400px) {
+  .header h1 { font-size: 18px; }
+  .main { padding: 12px 8px 40px; gap: 12px; }
+  .viewer-wrapper { height: min(300px, 50vh); }
+  .controls { padding: 10px 12px; gap: 8px; }
+  .grid-btn { padding: 4px 8px; font-size: 12px; }
+  .upload-zone { padding: 24px 12px; }
+  .upload-text { font-size: 13px; }
+  .custom-input { width: 40px; }
+}
+
+/* 触摸设备：放大选框手柄 */
+@media (pointer: coarse) {
+  .handle {
+    width: 22px;
+    height: 22px;
+    border-width: 3px;
+  }
+  .handle.nw { top: -11px; left: -11px; }
+  .handle.n  { top: -11px; margin-left: -11px; }
+  .handle.ne { top: -11px; right: -11px; }
+  .handle.w  { margin-top: -11px; left: -11px; }
+  .handle.e  { margin-top: -11px; right: -11px; }
+  .handle.sw { bottom: -11px; left: -11px; }
+  .handle.s  { bottom: -11px; margin-left: -11px; }
+  .handle.se { bottom: -11px; right: -11px; }
+  .btn-camera { display: inline-flex; }
+  #viewerHint2 { display: none; }
+  #viewerHint3 { display: block; }
+}
+
+/* 安全区域适配 (iPhone X+ notch) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  @media (max-width: 640px) {
+    .main { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+  }
+}
+
+/* Standalone 模式 (添加到主屏幕后) */
+@media (display-mode: standalone) {
+  .header { padding-top: calc(32px + env(safe-area-inset-top, 0px)); }
+  @media (max-width: 640px) {
+    .header { padding-top: calc(24px + env(safe-area-inset-top, 0px)); }
+  }
 }

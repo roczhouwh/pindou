@@ -33,6 +33,18 @@ const applyCustom = $('#applyCustom');
 const simplifySlider = $('#simplifySlider');
 const simplifyValue = $('#simplifyValue');
 const aspectLock = $('#aspectLock');
+const cameraInput = $('#cameraInput');
+const cameraBtn = $('#cameraBtn');
+const shareBtn = $('#shareBtn');
+const loadingOverlay = $('#loadingOverlay');
+const loadingText = $('#loadingText');
+const installBanner = $('#installBanner');
+const installBtn = $('#installBtn');
+const installClose = $('#installClose');
+const viewerHint3 = $('#viewerHint3');
+
+// 触摸设备检测
+const isTouchDevice = navigator.maxTouchPoints > 0;
 
 // ----- 状态 -----
 const state = {
@@ -62,6 +74,10 @@ const state = {
   dragHandle: null,
   dragSelection: null,
   panStart: { x: 0, y: 0 },
+  // 触摸状态
+  lastTouchDist: 0,
+  lastTouchCenter: { x: 0, y: 0 },
+  isPinching: false,
 };
 
 // ----- 初始化 -----
@@ -73,6 +89,15 @@ const viewerCtx = viewerCanvas.getContext('2d');
 
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+cameraBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  cameraInput.click();
+});
+
+cameraInput.addEventListener('change', (e) => {
   if (e.target.files.length > 0) handleFile(e.target.files[0]);
 });
 
@@ -143,7 +168,8 @@ function showViewer() {
   statsSection.hidden = true;
   downloadBtn.disabled = true;
   viewerHint.hidden = false;
-  viewerHint2.hidden = false;
+  viewerHint2.hidden = isTouchDevice;
+  viewerHint3.hidden = !isTouchDevice;
   selectionBox.hidden = false;
   resizeViewerCanvas();
   renderViewer();
@@ -258,6 +284,9 @@ viewerWrapper.addEventListener('pointerdown', (e) => {
   if (e.button === 2) return; // 右键留给平移
   if (e.target.classList.contains('handle')) return; // 手柄拖拽
 
+  // 触摸设备：单指在选框外 = 平移，非触摸设备 = 新框选
+  const isTouchPointer = e.pointerType === 'touch';
+
   const coords = getImageCoords(e.clientX, e.clientY);
   if (!coords.inImage) return;
 
@@ -272,8 +301,15 @@ viewerWrapper.addEventListener('pointerdown', (e) => {
     state.dragStart = { ix, iy };
     state.dragSelection = { ...sel };
     viewerWrapper.setPointerCapture(e.pointerId);
+  } else if (isTouchPointer) {
+    // 触摸设备：选框外拖拽 = 平移
+    state.isPanning = true;
+    state.panStart = { x: state.panX, y: state.panY };
+    state.dragStart = { x: e.clientX, y: e.clientY };
+    viewerWrapper.classList.add('panning');
+    viewerWrapper.setPointerCapture(e.pointerId);
   } else {
-    // 开始新的框选
+    // 桌面设备：开始新的框选
     state.isDragging = true;
     state.dragStart = { ix, iy };
     state.dragSelection = { x: ix, y: iy, w: 0, h: 0 };
@@ -385,6 +421,56 @@ viewerWrapper.addEventListener('wheel', (e) => {
   renderViewer();
   updateSelectionBox();
 }, { passive: false });
+
+// 触摸事件：双指缩放 + 双指平移
+viewerWrapper.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    state.lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    state.lastTouchCenter = {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
+    };
+    state.isPinching = true;
+    state.panStart = { x: state.panX, y: state.panY };
+  }
+}, { passive: false });
+
+viewerWrapper.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && state.isPinching) {
+    e.preventDefault();
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    const center = {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
+    };
+
+    // 缩放
+    const scale = dist / state.lastTouchDist;
+    state.zoom = Math.max(0.2, Math.min(5, state.zoom * scale));
+    state.lastTouchDist = dist;
+
+    // 双指平移
+    const dx = center.x - state.lastTouchCenter.x;
+    const dy = center.y - state.lastTouchCenter.y;
+    state.panX = state.panStart.x + dx;
+    state.panY = state.panStart.y + dy;
+    state.lastTouchCenter = center;
+
+    renderViewer();
+    updateSelectionBox();
+  }
+}, { passive: false });
+
+viewerWrapper.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    state.isPinching = false;
+  }
+});
 
 // 窗口大小调整
 window.addEventListener('resize', () => {
@@ -811,6 +897,38 @@ downloadBtn.addEventListener('click', () => {
   downloadPNG();
 });
 
+// 分享按钮
+shareBtn.addEventListener('click', () => {
+  if (!state.gridData) return;
+  sharePNG();
+});
+
+function sharePNG() {
+  const grid = state.gridData;
+  const rows = grid.length;
+  const cols = grid[0].length;
+
+  downloadCanvas.toBlob((blob) => {
+    if (!blob) return;
+    const file = new File([blob], `拼豆图纸_${cols}x${rows}.png`, { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        title: '拼豆图纸生成器',
+        text: `拼豆图纸 ${cols}×${rows}`,
+        files: [file],
+      }).catch(() => {});
+    } else if (navigator.share) {
+      // 不支持文件分享，先下载再分享
+      downloadPNG();
+      navigator.share({
+        title: '拼豆图纸生成器',
+        text: `拼豆图纸 ${cols}×${rows} — 用拼豆图纸生成器制作`,
+      }).catch(() => {});
+    }
+  }, 'image/png');
+}
+
 function downloadPNG() {
   const grid = state.gridData;
   const rows = grid.length;
@@ -962,4 +1080,69 @@ $('#resetBtn').addEventListener('click', () => {
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
+}
+
+// ============================================================
+// 9. 加载状态
+// ============================================================
+
+function showLoading(msg) {
+  loadingText.textContent = msg || '正在处理…';
+  loadingOverlay.hidden = false;
+}
+
+function hideLoading() {
+  loadingOverlay.hidden = true;
+}
+
+// 在 generateGrid 中包裹加载状态
+const _origGenerateGrid = generateGrid;
+generateGrid = function() {
+  const startTime = Date.now();
+  showLoading('正在生成图纸…');
+  // 使用 requestAnimationFrame 避免阻塞 UI 更新
+  requestAnimationFrame(() => {
+    _origGenerateGrid.call(this);
+    // 至少显示 300ms 避免闪烁
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(0, 300 - elapsed);
+    setTimeout(hideLoading, delay);
+  });
+};
+
+// ============================================================
+// 10. 安装提示 (PWA)
+// ============================================================
+
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBanner.hidden = false;
+});
+
+installBtn.addEventListener('click', () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    installBanner.hidden = true;
+  });
+});
+
+installClose.addEventListener('click', () => {
+  installBanner.hidden = true;
+  deferredPrompt = null;
+});
+
+// 已安装或不支持 PWA 时不显示
+window.addEventListener('appinstalled', () => {
+  installBanner.hidden = true;
+  deferredPrompt = null;
+});
+
+// 分享按钮在支持 Web Share API 的移动端显示
+if (navigator.share) {
+  shareBtn.hidden = false;
 }

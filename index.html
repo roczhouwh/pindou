@@ -2,8 +2,15 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6366F1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="拼豆图纸">
   <title>拼豆图纸生成器</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,6 +26,7 @@
     <section class="upload-section" id="uploadSection">
       <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
         <div class="upload-icon">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -28,6 +36,13 @@
         </div>
         <p class="upload-text">拖拽图片到此处，或 <strong>点击上传</strong></p>
         <p class="upload-hint">支持 JPG / PNG / WebP，最大 20MB</p>
+        <button id="cameraBtn" class="btn btn-camera" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          拍照
+        </button>
       </div>
       <p class="upload-error" id="uploadError" hidden></p>
     </section>
@@ -55,7 +70,8 @@
         </div>
       </div>
       <p class="viewer-hint" id="viewerHint">✨ 在图片上拖拽框选目标区域</p>
-      <p class="viewer-hint" id="viewerHint2">🖱 滚轮缩放 · 右键拖拽平移（或拖拽空白区域）</p>
+      <p class="viewer-hint" id="viewerHint2">🖱 滚轮缩放 · 右键拖拽平移</p>
+      <p class="viewer-hint" id="viewerHint3" hidden>📱 双指缩放/平移 · 选框外拖拽平移</p>
     </section>
 
     <!-- ====== 控制栏 ====== -->
@@ -91,6 +107,13 @@
         </div>
         <div class="control-group">
           <button id="downloadBtn" class="btn btn-primary" disabled>📥 下载 PNG</button>
+          <button id="shareBtn" class="btn btn-share" hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            分享
+          </button>
         </div>
       </div>
     </section>
@@ -123,6 +146,19 @@
       </div>
     </section>
 
+    <!-- ====== 加载提示 ====== -->
+    <div class="loading-overlay" id="loadingOverlay" hidden>
+      <div class="loading-spinner"></div>
+      <p class="loading-text" id="loadingText">正在生成图纸…</p>
+    </div>
+
+    <!-- ====== 安装提示 ====== -->
+    <div class="install-banner" id="installBanner" hidden>
+      <span class="install-text">📌 将拼豆图纸添加到主屏幕，方便随时使用</span>
+      <button class="install-btn" id="installBtn">添加</button>
+      <button class="install-close" id="installClose">✕</button>
+    </div>
+
     <!-- ====== 隐藏画布用于像素采样 ====== -->
     <canvas id="offscreenCanvas" hidden></canvas>
     <!-- ====== 隐藏画布用于下载合成 ====== -->
@@ -132,5 +168,12 @@
 
   <script src="color-palette.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

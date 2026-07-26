@@ -7,14 +7,20 @@
 - 原生 HTML / CSS / JS，零依赖
 - Canvas API 完成所有图像处理与渲染
 - MARD 221 色标准色板（来源：peiseka.com）
+- PWA：manifest.json + Service Worker + 离线缓存
 
 ## 文件结构
 
 ```
-index.html          — 页面结构（上传区 / 查看器 / 控制栏 / 预览 / 统计）
-style.css           — 样式，CSS 变量主题，响应式适配
-app.js              — 核心逻辑（上传、选框、缩放平移、网格生成、预览、下载）
+index.html          — 页面结构（上传区 / 查看器 / 控制栏 / 预览 / 统计 / 拍照入口 / 加载动画 / 安装提示）
+style.css           — 样式，CSS 变量主题，响应式适配（640px/400px 断点），触摸设备适配
+app.js              — 核心逻辑（上传、选框、缩放平移、网格生成、预览、下载、触摸交互、分享、安装提示）
 color-palette.js    — PERLER_PALETTE 221 色 + findNearestColor()
+manifest.json       — PWA 清单（名称、图标、standalone 模式）
+sw.js               — Service Worker（cache-first 离线缓存策略）
+icon.svg            — 应用图标源文件（8×8 彩色拼豆网格）
+icon-192.png        — 192×192 图标
+icon-512.png        — 512×512 图标
 CLAUDE.md           — 项目文档
 ```
 
@@ -43,6 +49,8 @@ CLAUDE.md           — 项目文档
 | `rawGridData/rawColorCounts` | 颜色简化前的原始数据（供 slider 回溯） |
 | `simplify` | 颜色简化强度 0-100，0=关闭 |
 | `aspectLock` | 是否保持选框宽高比（默认 true） |
+| `lastTouchDist/center` | 双指缩放/平移的触摸状态 |
+| `isPinching` | 是否正在进行双指操作 |
 
 ## 色板 (color-palette.js)
 
@@ -52,21 +60,42 @@ CLAUDE.md           — 项目文档
 
 ## 交互操作
 
+### 桌面端
 - **框选区域**：在图片上拖拽（空白处开始新选框，选框内拖拽移动）
 - **8 个手柄**：调整选框大小
 - **滚轮**：缩放 (0.2x ~ 5x)
 - **右键拖拽**：平移图片
+
+### 移动端（触摸设备）
+- **选框内拖拽**：移动选框
+- **选框外拖拽**：平移图片
+- **双指捏合**：缩放
+- **双指平移**：移动图片
+- **8 个手柄**：22px 大圆点（桌面端 12px），调整选框
+
+### 通用
 - **网格预设**：29 / 52 / 78 / 104（宽度，高度由选框比例自动计算）
 - **保持比例**：默认勾选，网格高度自动匹配选框宽高比；取消后恢复独立 W×H
 - **颜色简化**：滑块 0-100%，合并网格中相近的颜色，减少颜色种类
 - **透明像素**：采样时跳过 alpha<128 的像素，全透格子留白标记
 - **自定义网格**：1~104 任意尺寸
+- **拍照上传**：移动端显示拍照按钮，调用原生相机
+- **分享**：支持 Web Share API 的设备可分享 PNG 文件
 
 ## 预览参数
 
 - cellSize = max(10, floor(720 / max(rows, cols)))，范围 10~24px
 - 文字阈值 minCellForText = 10px（所有预设尺寸均显示色号）
 - 色号字体 = max(5, cellSize * 0.35)px，深色格白字、浅色格黑字
+
+## PWA 相关
+
+- `manifest.json`：standalone 模式，indigo 主题色，maskable 图标
+- `sw.js`：cache-first 策略，预缓存所有核心资源，离线可用
+- `beforeinstallprompt`：监听安装事件，显示底部横幅
+- `appinstalled`：安装后隐藏横幅
+- 安全区域：`env(safe-area-inset-bottom)` 适配 iPhone notch
+- Standalone 模式：`env(safe-area-inset-top)` 适配状态栏
 
 ## 未来可扩展方向
 
@@ -77,7 +106,14 @@ CLAUDE.md           — 项目文档
 - 网格保存/加载
 - 色板自定义编辑
 - 撤销/重做
+- 将图片像素化，再生成拼豆图纸
 
 ## 运行方式
 
 直接用浏览器打开 `index.html`，无需构建或服务端。
+为获得完整 PWA 体验（SW 离线缓存），建议用 HTTP 服务打开：
+
+```bash
+python3 -m http.server 8080
+# 然后访问 http://localhost:8080
+```
