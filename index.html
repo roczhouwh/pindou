@@ -36,7 +36,7 @@
         </div>
         <p class="upload-text">拖拽图片到此处，或 <strong>点击上传</strong></p>
         <p class="upload-hint">支持 JPG / PNG / WebP，最大 20MB</p>
-        <button id="cameraBtn" class="btn btn-camera" hidden>
+        <button id="cameraBtn" class="btn btn-camera">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
@@ -51,6 +51,7 @@
     <section class="viewer-section" id="viewerSection" hidden>
       <div class="viewer-toolbar">
         <button class="btn btn-sm" id="resetBtn">🔄 重新上传</button>
+        <button class="btn btn-sm" id="resetSelectionBtn">↩ 重置选框</button>
       </div>
       <div class="viewer-wrapper" id="viewerWrapper">
         <canvas id="viewerCanvas"></canvas>
@@ -71,7 +72,7 @@
       </div>
       <p class="viewer-hint" id="viewerHint">✨ 在图片上拖拽框选目标区域</p>
       <p class="viewer-hint" id="viewerHint2">🖱 滚轮缩放 · 右键拖拽平移</p>
-      <p class="viewer-hint" id="viewerHint3" hidden>📱 双指缩放/平移 · 选框外拖拽平移</p>
+      <p class="viewer-hint" id="viewerHint3" hidden>📱 双指缩放/平移</p>
     </section>
 
     <!-- ====== 控制栏 ====== -->

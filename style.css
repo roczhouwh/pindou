@@ -124,6 +124,7 @@ body {
   max-width: 800px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .viewer-wrapper {
@@ -358,7 +359,7 @@ body {
 }
 
 .btn-camera {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 6px;
   margin-top: 16px;

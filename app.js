@@ -284,9 +284,6 @@ viewerWrapper.addEventListener('pointerdown', (e) => {
   if (e.button === 2) return; // 右键留给平移
   if (e.target.classList.contains('handle')) return; // 手柄拖拽
 
-  // 触摸设备：单指在选框外 = 平移，非触摸设备 = 新框选
-  const isTouchPointer = e.pointerType === 'touch';
-
   const coords = getImageCoords(e.clientX, e.clientY);
   if (!coords.inImage) return;
 
@@ -301,15 +298,8 @@ viewerWrapper.addEventListener('pointerdown', (e) => {
     state.dragStart = { ix, iy };
     state.dragSelection = { ...sel };
     viewerWrapper.setPointerCapture(e.pointerId);
-  } else if (isTouchPointer) {
-    // 触摸设备：选框外拖拽 = 平移
-    state.isPanning = true;
-    state.panStart = { x: state.panX, y: state.panY };
-    state.dragStart = { x: e.clientX, y: e.clientY };
-    viewerWrapper.classList.add('panning');
-    viewerWrapper.setPointerCapture(e.pointerId);
   } else {
-    // 桌面设备：开始新的框选
+    // 开始新的框选
     state.isDragging = true;
     state.dragStart = { ix, iy };
     state.dragSelection = { x: ix, y: iy, w: 0, h: 0 };
@@ -1056,6 +1046,18 @@ function downloadPNG() {
 // ============================================================
 // 工具函数
 // ============================================================
+
+// 重置选框（恢复默认位置和大小）
+$('#resetSelectionBtn').addEventListener('click', () => {
+  state.selection = { x: 0.15, y: 0.15, w: 0.7, h: 0.7 };
+  state.zoom = 1;
+  state.panX = 0;
+  state.panY = 0;
+  renderViewer();
+  updateSelectionBox();
+  syncGridAspect();
+  generateGrid();
+});
 
 // 重新上传
 $('#resetBtn').addEventListener('click', () => {
