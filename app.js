@@ -90,6 +90,7 @@ const viewerCtx = viewerCanvas.getContext('2d');
 uploadZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => {
   if (e.target.files.length > 0) handleFile(e.target.files[0]);
+  fileInput.value = ''; // 允许重复选择同一文件
 });
 
 $('#galleryBtn').addEventListener('click', (e) => {
@@ -101,6 +102,11 @@ cameraBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   openCamera();
 });
+
+// getUserMedia 回退方案：系统相机拍照后的文件处理
+cameraInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+  cameraInput.value = ''; // 允许重复选择同一文件
 
 // 通过 getUserMedia 直接调用相机
 let cameraStream = null;
