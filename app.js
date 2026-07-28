@@ -32,7 +32,6 @@ const customH = $('#customH');
 const applyCustom = $('#applyCustom');
 const simplifySlider = $('#simplifySlider');
 const simplifyValue = $('#simplifyValue');
-const aspectLock = $('#aspectLock');
 const cameraInput = $('#cameraInput');
 const cameraBtn = $('#cameraBtn');
 const shareBtn = $('#shareBtn');
@@ -59,8 +58,6 @@ const state = {
   // 网格尺寸
   gridW: 29,
   gridH: 29,
-  // 保持选框比例
-  aspectLock: true,
   // 颜色简化 0-100, 0=关闭
   simplify: 0,
   // 生成的网格数据
@@ -121,7 +118,7 @@ function openCamera() {
     overlay.className = 'camera-overlay';
     overlay.innerHTML = `
       <div class="camera-viewport">
-        <video id="cameraVideo" autoplay playsinline></video>
+        <video id="cameraVideo" autoplay playsinline muted></video>
         <div class="camera-toolbar">
           <button class="btn btn-capture" id="cameraCaptureBtn">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -255,10 +252,14 @@ function showViewer() {
   viewerHint2.hidden = isTouchDevice;
   viewerHint3.hidden = !isTouchDevice;
   selectionBox.hidden = false;
-  resizeViewerCanvas();
-  renderViewer();
-  updateSelectionBox();
-  generateGrid();
+  // iOS Safari 在 hidden→visible 切换后布局可能未完成，getBoundingClientRect 返回 0
+  // setTimeout(0) 比 requestAnimationFrame 更可靠地等待 iOS Safari 完成布局计算
+  setTimeout(() => {
+    resizeViewerCanvas();
+    renderViewer();
+    updateSelectionBox();
+    generateGrid();
+  }, 0);
 }
 
 function resizeViewerCanvas() {
@@ -467,7 +468,6 @@ document.addEventListener('pointerup', (e) => {
     state.dragHandle = null;
     viewerHint.hidden = true;
     viewerHint2.hidden = true;
-    syncGridAspect();
     generateGrid();
   }
   if (state.isPanning) {
@@ -566,7 +566,6 @@ $$('.grid-btn').forEach((btn) => {
     btn.classList.add('active');
     state.gridW = parseInt(btn.dataset.w);
     state.gridH = parseInt(btn.dataset.h);
-    syncGridAspect(); // 保持比例时自动调整 gridH
     customW.value = '';
     customH.value = '';
     generateGrid();
@@ -580,36 +579,11 @@ applyCustom.addEventListener('click', () => {
   const hasH = !isNaN(h) && h >= 15 && h <= 104;
 
   if (!hasW && !hasH) return;
-  if (!hasW && hasH) {
-    // 只填了高度：由高度反算宽度
-    state.gridH = h;
-    state.gridW = Math.round(h * state.selection.w / state.selection.h);
-  } else if (hasW && !hasH) {
-    // 只填了宽度：由宽度算高度
-    state.gridW = w;
-    syncGridAspect();
-  } else {
-    state.gridW = w;
-    state.gridH = h;
-  }
+  // 固定网格尺寸：选框内容按比例 fit 进网格，不再调整网格尺寸
+  state.gridW = hasW ? w : state.gridW;
+  state.gridH = hasH ? h : state.gridH;
   $$('.grid-btn').forEach((b) => b.classList.remove('active'));
   generateGrid();
-});
-
-// 保持比例复选框
-aspectLock.addEventListener('change', () => {
-  state.aspectLock = aspectLock.checked;
-  if (state.aspectLock && state.image) {
-    syncGridAspect();
-  } else if (!state.aspectLock && state.image) {
-    // 取消勾选：恢复当前预设按钮的原始尺寸
-    const activeBtn = $('.grid-btn.active');
-    if (activeBtn) {
-      state.gridW = parseInt(activeBtn.dataset.w);
-      state.gridH = parseInt(activeBtn.dataset.h);
-    }
-  }
-  if (state.image) generateGrid();
 });
 
 // 颜色简化滑块
@@ -629,25 +603,9 @@ simplifySlider.addEventListener('input', () => {
 // 5. 网格生成 + 色板映射
 // ============================================================
 
-/** 根据选框宽高比同步 gridH（以 gridW 为基准），clamp 到 15-104 */
-function syncGridAspect() {
-  if (!state.aspectLock || !state.image) return;
-  const sel = state.selection;
-  if (sel.w <= 0 || sel.h <= 0) return;
-
-  const selAspect = sel.w / sel.h;
-  let gw = state.gridW;
-  let gh = Math.round(gw / selAspect);
-
-  // Clamp 高度，溢出则反算宽度
-  if (gh < 15) { gh = 15; gw = Math.round(15 * selAspect); }
-  if (gh > 104) { gh = 104; gw = Math.round(104 * selAspect); }
-  gw = Math.max(15, Math.min(104, gw));
-
-  state.gridW = gw;
-  state.gridH = gh;
-}
-
+// ============================================================
+// ============================================================
+// 5. 网格生成 + 色板映射
 function generateGrid() {
   if (!state.image) return;
 
@@ -656,19 +614,54 @@ function generateGrid() {
   const gh = state.gridH;
 
   // 创建离屏 canvas 用于采样
+  // iOS Safari 对大 canvas 有硬限制（~4096px 或总像素上限），
+  // 大图先降采样到最长边 2048 再采样，颜色精度不受影响
+  const MAX_OFFSCREEN = 2048;
+  let sampleW = state.imageW;
+  let sampleH = state.imageH;
+  if (Math.max(sampleW, sampleH) > MAX_OFFSCREEN) {
+    const scale = MAX_OFFSCREEN / Math.max(sampleW, sampleH);
+    sampleW = Math.round(sampleW * scale);
+    sampleH = Math.round(sampleH * scale);
+  }
+
   const offCtx = offscreenCanvas.getContext('2d');
-  offscreenCanvas.width = state.imageW;
-  offscreenCanvas.height = state.imageH;
-  offCtx.drawImage(state.image, 0, 0);
+  offscreenCanvas.width = sampleW;
+  offscreenCanvas.height = sampleH;
+  offCtx.drawImage(state.image, 0, 0, sampleW, sampleH);
 
-  // 采样像素
-  const selX = Math.floor(x * state.imageW);
-  const selY = Math.floor(y * state.imageH);
-  const selW = Math.floor(w * state.imageW);
-  const selH = Math.floor(h * state.imageH);
+  // 选框像素坐标
+  const selX = Math.floor(x * sampleW);
+  const selY = Math.floor(y * sampleH);
+  const selW = Math.floor(w * sampleW);
+  const selH = Math.floor(h * sampleH);
 
-  const cellW = selW / gw;
-  const cellH = selH / gh;
+  // ---- 选框内容完整放入网格（contain），居中，不裁剪 ----
+  // 选框宽高比 vs 网格宽高比，计算内容在网格中占据的格数
+  // 选框宽于网格时，内容填满宽度，上下留空；高于网格时，填满高度，左右留空
+  const selAspect = selW / selH;
+  const gridAspect = gw / gh;
+
+  let contentW, contentH, offsetCol, offsetRow;
+  if (selAspect >= gridAspect) {
+    // 内容填满宽度，上下留空
+    contentW = gw;
+    contentH = Math.round(gw / selAspect);
+    contentH = Math.max(1, Math.min(gh, contentH));
+    offsetCol = 0;
+    offsetRow = Math.floor((gh - contentH) / 2);
+  } else {
+    // 内容填满高度，左右留空
+    contentH = gh;
+    contentW = Math.round(gh * selAspect);
+    contentW = Math.max(1, Math.min(gw, contentW));
+    offsetCol = Math.floor((gw - contentW) / 2);
+    offsetRow = 0;
+  }
+
+  // 每个内容格对应选框的像素尺寸（contentW/gw = contentH/gh = selAspect，格子为正方形）
+  const cellSampW = selW / contentW;
+  const cellSampH = selH / contentH;
 
   const grid = [];
   const colorMap = new Map();
@@ -676,17 +669,26 @@ function generateGrid() {
   for (let row = 0; row < gh; row++) {
     grid[row] = [];
     for (let col = 0; col < gw; col++) {
-      // 采样单元格中心区域
-      const cx = selX + (col + 0.5) * cellW;
-      const cy = selY + (row + 0.5) * cellH;
-      const sampleW = Math.max(2, Math.floor(cellW * 0.5));
-      const sampleH = Math.max(2, Math.floor(cellH * 0.5));
+      // 判断是否在内容区域内，不在则留空
+      if (row < offsetRow || row >= offsetRow + contentH ||
+          col < offsetCol || col >= offsetCol + contentW) {
+        grid[row][col] = null;
+        continue;
+      }
+
+      // 映射到选框内的像素坐标
+      const contentRow = row - offsetRow;
+      const contentCol = col - offsetCol;
+      const cx = selX + (contentCol + 0.5) * cellSampW;
+      const cy = selY + (contentRow + 0.5) * cellSampH;
+      const winW = Math.max(2, Math.floor(cellSampW * 0.5));
+      const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 
       const imageData = offCtx.getImageData(
-        Math.max(0, Math.floor(cx - sampleW / 2)),
-        Math.max(0, Math.floor(cy - sampleH / 2)),
-        Math.min(sampleW, state.imageW - Math.floor(cx - sampleW / 2)),
-        Math.min(sampleH, state.imageH - Math.floor(cy - sampleH / 2))
+        Math.max(0, Math.floor(cx - winW / 2)),
+        Math.max(0, Math.floor(cy - winH / 2)),
+        Math.min(winW, sampleW - Math.floor(cx - winW / 2)),
+        Math.min(winH, sampleH - Math.floor(cy - winH / 2))
       );
 
       // 平均色
@@ -852,12 +854,29 @@ function renderPreview() {
   const grid = state.gridData;
   const rows = grid.length;
   const cols = grid[0].length;
-  const cellSize = Math.max(10, Math.floor(720 / Math.max(rows, cols)));
+
+  // 网格宽高比 = cols/rows。预览按网格真实比例绘制（非强制正方形格子），
+  // 选框内容完整放入网格（contain），留白居中，与选框形状一致。
+  // （此前用正方形 cellSize 会把长方形网格拉伸，导致图纸与选框不一致）。
+  const gridAspect = cols / rows;
+  let drawW, drawH;
+  if (gridAspect >= 1) {
+    drawW = 720;
+    drawH = Math.round(720 / gridAspect);
+  } else {
+    drawH = 720;
+    drawW = Math.round(720 * gridAspect);
+  }
+  // 单元格尺寸（长方形，保持网格真实比例）
+  const cellW = drawW / cols;
+  const cellH = drawH / rows;
+  const minCell = Math.min(cellW, cellH);
+
   const dpr = window.devicePixelRatio || 1;
   const padding = 4;
 
-  const canvasW = cols * cellSize + padding * 2;
-  const canvasH = rows * cellSize + padding * 2;
+  const canvasW = drawW + padding * 2;
+  const canvasH = drawH + padding * 2;
 
   previewCanvas.width = canvasW * dpr;
   previewCanvas.height = canvasH * dpr;
@@ -875,22 +894,22 @@ function renderPreview() {
     for (let col = 0; col < cols; col++) {
       const cell = grid[row][col];
       ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
-      ctx.fillRect(padding + col * cellSize, padding + row * cellSize, cellSize, cellSize);
+      ctx.fillRect(padding + col * cellW, padding + row * cellH, cellW, cellH);
     }
   }
   // 空格子画斜线标记
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       if (grid[row][col]) continue;
-      const x = padding + col * cellSize;
-      const y = padding + row * cellSize;
+      const x = padding + col * cellW;
+      const y = padding + row * cellH;
       ctx.strokeStyle = 'rgba(0,0,0,0.1)';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(x, y);
-      ctx.lineTo(x + cellSize, y + cellSize);
-      ctx.moveTo(x + cellSize, y);
-      ctx.lineTo(x, y + cellSize);
+      ctx.lineTo(x + cellW, y + cellH);
+      ctx.moveTo(x + cellW, y);
+      ctx.lineTo(x, y + cellH);
       ctx.stroke();
     }
   }
@@ -899,21 +918,21 @@ function renderPreview() {
   ctx.lineWidth = 0.5;
   for (let row = 0; row <= rows; row++) {
     ctx.beginPath();
-    ctx.moveTo(padding, padding + row * cellSize);
-    ctx.lineTo(padding + cols * cellSize, padding + row * cellSize);
+    ctx.moveTo(padding, padding + row * cellH);
+    ctx.lineTo(padding + cols * cellW, padding + row * cellH);
     ctx.stroke();
   }
   for (let col = 0; col <= cols; col++) {
     ctx.beginPath();
-    ctx.moveTo(padding + col * cellSize, padding);
-    ctx.lineTo(padding + col * cellSize, padding + rows * cellSize);
+    ctx.moveTo(padding + col * cellW, padding);
+    ctx.lineTo(padding + col * cellW, padding + rows * cellH);
     ctx.stroke();
   }
 
   // 第三遍：绘制色号文字（空格子跳过）
   const minCellForText = 10;
-  if (cellSize >= minCellForText) {
-    const fontSize = Math.max(5, cellSize * 0.35);
+  if (minCell >= minCellForText) {
+    const fontSize = Math.max(5, minCell * 0.35);
     ctx.font = `${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -921,8 +940,8 @@ function renderPreview() {
       for (let col = 0; col < cols; col++) {
         const c = grid[row][col];
         if (!c) continue;
-        const cx = padding + col * cellSize + cellSize / 2;
-        const cy = padding + row * cellSize + cellSize / 2;
+        const cx = padding + col * cellW + cellW / 2;
+        const cy = padding + row * cellH + cellH / 2;
         const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
         ctx.fillStyle = lum > 0.5 ? '#000000' : '#FFFFFF';
         ctx.fillText(c.name, cx, cy);
@@ -930,7 +949,7 @@ function renderPreview() {
     }
   }
 
-  previewInfo.textContent = `${cols}×${rows} 网格 · ${cellSize}px/格`;
+  previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格`;
 }
 
 // ============================================================
@@ -978,6 +997,9 @@ shareBtn.addEventListener('click', () => {
 });
 
 function sharePNG() {
+  if (!state.gridData) return;
+  // 先渲染下载画布，再分享
+  renderDownloadCanvas();
   const grid = state.gridData;
   const rows = grid.length;
   const cols = grid[0].length;
@@ -993,7 +1015,7 @@ function sharePNG() {
         files: [file],
       }).catch(() => {});
     } else if (navigator.share) {
-      // 不支持文件分享，先下载再分享
+      // 不支持文件分享，备选下载
       downloadPNG();
       navigator.share({
         title: '拼豆图纸生成器',
@@ -1003,23 +1025,37 @@ function sharePNG() {
   }, 'image/png');
 }
 
-function downloadPNG() {
+/** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
+function renderDownloadCanvas() {
   const grid = state.gridData;
   const rows = grid.length;
   const cols = grid[0].length;
-  const cellSize = 28; // 下载时每个格子 28px（足够显示色号）
+
+  // 按网格宽高比计算单元格尺寸，避免图纸被拉伸
+  const gridAspect = cols / rows;
+  const baseCell = 28; // 较短边 28px
+  let cellW, cellH;
+  if (gridAspect >= 1) {
+    cellH = baseCell;
+    cellW = Math.round(baseCell * gridAspect);
+  } else {
+    cellW = baseCell;
+    cellH = Math.round(baseCell / gridAspect);
+  }
+  const minCell = Math.min(cellW, cellH);
+
   const dpr = 2; // 2x 高清
   const padding = 16;
   const titleHeight = 40;
   const legendItemHeight = 28;
   const legendPadding = 16;
-  const legendTop = rows * cellSize + padding * 2 + titleHeight;
+  const legendTop = rows * cellH + padding * 2 + titleHeight;
 
   const legendCols = 5;
   const legendRows = Math.ceil(state.colorCounts.length / legendCols);
   const legendW = padding * 2 + legendCols * 180;
 
-  const canvasW = Math.max(cols * cellSize + padding * 2, legendW);
+  const canvasW = Math.max(cols * cellW + padding * 2, legendW);
   const canvasH = legendTop + legendPadding + legendRows * legendItemHeight + padding;
 
   downloadCanvas.width = canvasW * dpr;
@@ -1039,7 +1075,7 @@ function downloadPNG() {
   ctx.fillText(`拼豆图纸 ${cols}×${rows}`, canvasW / 2, padding + 28);
 
   // 绘制网格
-  const gridX = (canvasW - cols * cellSize) / 2;
+  const gridX = (canvasW - cols * cellW) / 2;
   const gridY = padding + titleHeight;
 
   // 第一遍：填充所有格子（空格子留白）
@@ -1047,7 +1083,7 @@ function downloadPNG() {
     for (let col = 0; col < cols; col++) {
       const cell = grid[row][col];
       ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
-      ctx.fillRect(gridX + col * cellSize, gridY + row * cellSize, cellSize, cellSize);
+      ctx.fillRect(gridX + col * cellW, gridY + row * cellH, cellW, cellH);
     }
   }
   // 第二遍：统一绘制网格线
@@ -1055,19 +1091,19 @@ function downloadPNG() {
   ctx.lineWidth = 0.5;
   for (let row = 0; row <= rows; row++) {
     ctx.beginPath();
-    ctx.moveTo(gridX, gridY + row * cellSize);
-    ctx.lineTo(gridX + cols * cellSize, gridY + row * cellSize);
+    ctx.moveTo(gridX, gridY + row * cellH);
+    ctx.lineTo(gridX + cols * cellW, gridY + row * cellH);
     ctx.stroke();
   }
   for (let col = 0; col <= cols; col++) {
     ctx.beginPath();
-    ctx.moveTo(gridX + col * cellSize, gridY);
-    ctx.lineTo(gridX + col * cellSize, gridY + rows * cellSize);
+    ctx.moveTo(gridX + col * cellW, gridY);
+    ctx.lineTo(gridX + col * cellW, gridY + rows * cellH);
     ctx.stroke();
   }
 
   // 第三遍：绘制色号文字
-  const fontSize = 7;
+  const fontSize = Math.max(5, Math.round(minCell * 0.35));
   ctx.font = `${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1075,8 +1111,8 @@ function downloadPNG() {
     for (let col = 0; col < cols; col++) {
       const c = grid[row][col];
       if (!c) continue;
-      const cx = gridX + col * cellSize + cellSize / 2;
-      const cy = gridY + row * cellSize + cellSize / 2;
+      const cx = gridX + col * cellW + cellW / 2;
+      const cy = gridY + row * cellH + cellH / 2;
       const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
       ctx.fillStyle = lum > 0.5 ? '#000000' : '#FFFFFF';
       ctx.fillText(c.name, cx, cy);
@@ -1113,10 +1149,26 @@ function downloadPNG() {
     ctx.textAlign = 'left';
     ctx.fillText(`${c.name} ×${c.count}`, lx + 28, ly + 15);
   }
+}
+
+function downloadPNG() {
+  if (!state.gridData) return;
+  renderDownloadCanvas();
+  const cols = state.gridData[0].length;
+  const rows = state.gridData.length;
 
   // 触发下载
   downloadCanvas.toBlob((blob) => {
     const url = URL.createObjectURL(blob);
+    // iOS Safari 不支持 blob URL 的 <a download>，改为新窗口打开让用户长按保存
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      window.open(url, '_blank');
+      // URL 稍后释放，给浏览器打开窗口的时间
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      return;
+    }
     const a = document.createElement('a');
     a.href = url;
     a.download = `拼豆图纸_${cols}x${rows}.png`;
@@ -1139,7 +1191,6 @@ $('#resetSelectionBtn').addEventListener('click', () => {
   state.panY = 0;
   renderViewer();
   updateSelectionBox();
-  syncGridAspect();
   generateGrid();
 });
 
@@ -1150,8 +1201,6 @@ $('#resetBtn').addEventListener('click', () => {
   state.colorCounts = null;
   state.rawGridData = null;
   state.rawColorCounts = null;
-  state.aspectLock = true;
-  aspectLock.checked = true;
   // 清空画布，避免残留旧图片
   viewerCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
   selectionBox.hidden = true;
