@@ -150,17 +150,24 @@ body {
 
 .selection-overlay {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   pointer-events: none;
+  z-index: 10;
 }
 
 .selection-box {
   position: absolute;
-  border: 2px dashed var(--selection);
-  background: rgba(99, 102, 241, 0.08);
+  border: 3px solid var(--selection);
+  background: rgba(99, 102, 241, 0.1);
   pointer-events: auto;
   cursor: move;
   touch-action: none;
+  z-index: 11;
+  /* 不依赖 hidden 属性，用 class 控制显隐 */
+  display: none;
+}
+.selection-box.visible {
+  display: block;
 }
 
 /* 8 控制手柄 */
@@ -566,8 +573,6 @@ body {
 
 .preview-canvas {
   display: block;
-  max-width: 100%;
-  height: auto;
   border-radius: 4px;
 }
 

@@ -85,6 +85,8 @@ CLAUDE.md           — 项目文档
 ## 预览参数
 
 - 画布最大边 720px，另一条边按网格宽高比 `cols/rows` 计算，单元格保持真实比例（非正方形）
+- 小屏自动缩放：画布宽于容器时按比例缩小（最小 35%）
+- 预览 canvas 显式设置 `style.width` 和 `style.height`，避免 iOS 14.4 用 `height` 属性值算错比例
 - cellW/cellH = drawW/cols, drawH/rows，范围 8~25px
 - 文字阈值 minCellForText = 10px（以较短边 `min(cellW, cellH)` 判断）
 - 色号字体 = max(5, minCell * 0.35)px，深色格白字、浅色格黑字
@@ -98,6 +100,14 @@ CLAUDE.md           — 项目文档
 - `appinstalled`：安装后隐藏横幅
 - 安全区域：`env(safe-area-inset-bottom)` 适配 iPhone notch
 - Standalone 模式：`env(safe-area-inset-top)` 适配状态栏
+
+## iOS 兼容性备忘
+
+### iOS 14.4 已修复
+- **选框不可见**：旧 iOS 对 `hidden` 属性切换后渲染可能不生效。改用 CSS class `.visible` 控制显隐 + 在 `renderViewer()` canvas 上直接绘制选框轮廓作为双保险
+- **图纸预览拉伸**：`previewCanvas` 缺少 `style.height` 导致 iOS 14.4 用 `height` 属性值（×dpr）算错 CSS 高度，格子被拉伸。显式设置 `style.height = canvasH + 'px'`
+- **布局时序**：iOS 14 的 `hidden→visible` 切换后 `getBoundingClientRect` 可能返回 0。通过 `void viewerWrapper.offsetHeight` 强制 reflow + `requestAnimationFrame` 确保布局完成后再读取尺寸
+- **`resizeViewerCanvas()` 零尺寸重试**：调用 `getBoundingClientRect` 返回 0 时自动 rAF 重试，避免无声设成 0 尺寸
 
 ## 未来可扩展方向
 

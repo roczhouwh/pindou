@@ -69,7 +69,7 @@
         <canvas id="viewerCanvas"></canvas>
         <!-- 矩形选框覆盖层 -->
         <div class="selection-overlay" id="selectionOverlay">
-          <div class="selection-box" id="selectionBox" hidden>
+          <div class="selection-box" id="selectionBox">    <!-- 用 class 控制显隐，不用 hidden 属性（iOS Safari 兼容） -->
             <!-- 8 个控制手柄 -->
             <div class="handle nw" data-handle="nw"></div>
             <div class="handle n" data-handle="n"></div>

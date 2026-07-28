@@ -251,19 +251,29 @@ function showViewer() {
   viewerHint.hidden = false;
   viewerHint2.hidden = isTouchDevice;
   viewerHint3.hidden = !isTouchDevice;
-  selectionBox.hidden = false;
-  // iOS Safari 在 hidden→visible 切换后布局可能未完成，getBoundingClientRect 返回 0
-  // setTimeout(0) 比 requestAnimationFrame 更可靠地等待 iOS Safari 完成布局计算
-  setTimeout(() => {
+  selectionBox.classList.add('visible');
+
+  // iOS Safari: hidden→visible 切换后强制同步布局计算
+  // 1. 先强制 reflow 确保 getBoundingClientRect 返回有效值
+  // 2. 再用 rAF 调度到下一帧，确保渲染管线已提交
+  void viewerWrapper.offsetHeight;
+  requestAnimationFrame(() => {
+    // 再次强制 reflow，防止 iOS Safari 在 rAF 回调中仍未完成布局
+    void viewerWrapper.offsetHeight;
     resizeViewerCanvas();
     renderViewer();
     updateSelectionBox();
     generateGrid();
-  }, 0);
+  });
 }
 
 function resizeViewerCanvas() {
   const rect = viewerWrapper.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    // iOS Safari 布局未就绪，重试
+    requestAnimationFrame(resizeViewerCanvas);
+    return;
+  }
   viewerCanvas.width = rect.width;
   viewerCanvas.height = rect.height;
   viewerCanvas.style.width = rect.width + 'px';
@@ -294,10 +304,27 @@ function renderViewer() {
   const cy = h / 2 + state.panY;
   const scaledW = drawW * state.zoom;
   const scaledH = drawH * state.zoom;
-  const x = cx - scaledW / 2;
-  const y = cy - scaledH / 2;
+  const imgX = cx - scaledW / 2;
+  const imgY = cy - scaledH / 2;
 
-  ctx.drawImage(state.image, x, y, scaledW, scaledH);
+  ctx.drawImage(state.image, imgX, imgY, scaledW, scaledH);
+
+  // 在 canvas 上绘制选框轮廓（双保险，兼容 iOS 14.4 等旧设备 DOM 渲染问题）
+  const sel = state.selection;
+  if (sel && sel.w > 0 && sel.h > 0) {
+    const sx = imgX + sel.x * scaledW;
+    const sy = imgY + sel.y * scaledH;
+    const sw = sel.w * scaledW;
+    const sh = sel.h * scaledH;
+    ctx.strokeStyle = '#6366F1';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(sx, sy, sw, sh);
+    ctx.setLineDash([]);
+    // 半透明填充
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
+    ctx.fillRect(sx, sy, sw, sh);
+  }
 }
 
 function getImageCoords(clientX, clientY) {
@@ -336,6 +363,9 @@ function getImageCoords(clientX, clientY) {
 // ============================================================
 
 function updateSelectionBox() {
+  // 确保选框可见（iOS Safari 可能因渲染延迟导致 class 不生效）
+  selectionBox.classList.add('visible');
+
   const sel = state.selection;
   const rect = viewerWrapper.getBoundingClientRect();
   const w = rect.width;
@@ -430,6 +460,7 @@ document.addEventListener('pointermove', (e) => {
       };
     }
     updateSelectionBox();
+    renderViewer(); // 更新 canvas 上绘制的选框轮廓
   }
 
   if (state.isResizing) {
@@ -451,6 +482,7 @@ document.addEventListener('pointermove', (e) => {
 
     state.selection = { x, y, w, h };
     updateSelectionBox();
+    renderViewer(); // 更新 canvas 上绘制的选框轮廓
   }
 
   if (state.isPanning) {
@@ -867,6 +899,14 @@ function renderPreview() {
     drawH = 720;
     drawW = Math.round(720 * gridAspect);
   }
+  // 小屏适配：如果预览容器宽度小于画布宽度，按比例缩小
+  const previewContainer = previewCanvas.parentElement;
+  const maxContainerW = previewContainer.clientWidth - 16; // 减去 padding 8px×2
+  if (drawW + 8 > maxContainerW) {
+    const scale = Math.max(0.35, maxContainerW / (drawW + 8));
+    drawW = Math.round(drawW * scale);
+    drawH = Math.round(drawH * scale);
+  }
   // 单元格尺寸（长方形，保持网格真实比例）
   const cellW = drawW / cols;
   const cellH = drawH / rows;
@@ -881,6 +921,7 @@ function renderPreview() {
   previewCanvas.width = canvasW * dpr;
   previewCanvas.height = canvasH * dpr;
   previewCanvas.style.width = canvasW + 'px';
+  previewCanvas.style.height = canvasH + 'px';
 
   const ctx = previewCanvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -1189,6 +1230,8 @@ $('#resetSelectionBtn').addEventListener('click', () => {
   state.zoom = 1;
   state.panX = 0;
   state.panY = 0;
+  // 先确保 canvas 尺寸正确（iOS Safari 可能因布局变化导致尺寸不符）
+  resizeViewerCanvas();
   renderViewer();
   updateSelectionBox();
   generateGrid();
@@ -1203,7 +1246,7 @@ $('#resetBtn').addEventListener('click', () => {
   state.rawColorCounts = null;
   // 清空画布，避免残留旧图片
   viewerCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
-  selectionBox.hidden = true;
+  selectionBox.classList.remove('visible');
   uploadSection.hidden = false;
   viewerSection.hidden = true;
   controlsSection.hidden = true;
