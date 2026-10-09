@@ -23,9 +23,13 @@ icon-192.png        — 192×192 图标
 icon-512.png        — 512×512 图标
 README.md           — 使用说明（面向用户）
 PLAN.md             — 开发计划：待做项优先级 + A4 打印方案
+REVIEW.md           — 代码审查报告：37 项问题 + 「已核实无问题」清单
 REFACTOR.md         — 代码结构对策：模块划分、阻塞点、防复发规则
 CLAUDE.md           — 项目文档（本文件）
 ```
+
+> **改代码前先读 [REVIEW.md](REVIEW.md)** —— 特别是 §五「明确核实"没问题"的项」，
+> 避免为"修问题"而改坏**本来正确**的代码。已知的 3 个 Critical 与 11 个 Major 见该文档。
 
 ## ⚠️ 代码结构约定（改代码前必读）
 
@@ -66,10 +70,11 @@ CLAUDE.md           — 项目文档（本文件）
 | `gridData` | 二维数组，每个元素为 `{name, hex, r, g, b}` 或 `null`（空格） |
 | `colorCounts` | 按数量降序的颜色统计数组 |
 | `rawGridData/rawColorCounts` | 颜色简化前的原始数据（供 slider 回溯） |
-| `simplify` | 颜色简化强度 0-100，0=关闭 |
-| `aspectLock` | 是否保持选框宽高比（默认 true） |
+| `simplify` | 颜色简化强度 0-100，0=关闭。**注意：重新上传/重置时不会清零**，见 REVIEW.md C1 |
 | `lastTouchDist/center` | 双指缩放/平移的触摸状态 |
 | `isPinching` | 是否正在进行双指操作 |
+| `dragStart` / `panStart` | ⚠️ **混用多套坐标语义**，见 REFACTOR.md §2.2 |
+| `dragSelection` / `rawGridData` / `rawColorCounts` | ⚠️ **实际使用但未在 state 字面量中声明**，见 REFACTOR.md §2.3 |
 
 ## 色板 (color-palette.js)
 
@@ -155,10 +160,15 @@ CLAUDE.md           — 项目文档（本文件）
 
 ## 运行方式
 
-直接用浏览器打开 `index.html`，无需构建或服务端。
-为获得完整 PWA 体验（SW 离线缓存），建议用 HTTP 服务打开：
+**必须经 HTTP 服务打开**，不能直接双击 `index.html`：
 
 ```bash
 python3 -m http.server 8080
 # 然后访问 http://localhost:8080
 ```
+
+> **⚠️ 已决定改用原生 ESM（`<script type="module">`）** —— 见 [REFACTOR.md](REFACTOR.md) §4.1。
+> ESM 受 CORS 限制，`file://` 协议下无法加载模块，**因此"双击打开"不再可用**，这是已接受的代价。
+> 若只做静态预览而不涉及模块加载，可直接打开查看，但**功能不完整**。
+>
+> 仍不引入任何构建工具：原生 `import`/`export` 即可，无需 `package.json` 或打包步骤。
