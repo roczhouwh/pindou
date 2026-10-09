@@ -8,7 +8,9 @@
 // 3. 导航请求：先走网络（让任何项目都能加载自己的首页）；离线时退回缓存的
 //    拼豆应用壳，且只有内容确实是拼豆页面才进缓存，防止存进别的项目首页。
 
-const CACHE_NAME = 'pindou-v2';
+// ⚠️ 任何对 index.html / app.js / color-palette.js / style.css 的改动都必须递增此版本号，
+// 否则 cache-first 会让老用户一直拿到旧文件、看不到更新（见 REVIEW.md 相关说明）
+const CACHE_NAME = 'pindou-v3';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 const ASSET_PATHS = [
@@ -33,6 +35,9 @@ const ASSETS = new Set(
 
 // 拼豆应用壳缓存键（用于离线导航兜底）
 const APP_SHELL_URL = new URL('./index.html', scopeURL.href).href;
+// 作用域根 URL。ASSET_PATHS 里的 './' 也指向同一页面，
+// 导航缓存必须同时更新这两个键，否则离线时其中一个会返回旧壳（见 REVIEW.md M6）
+const SCOPE_URL = scopeURL.href;
 
 // install: 预缓存拼豆核心资源
 self.addEventListener('install', (event) => {
@@ -86,16 +91,23 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then(async (resp) => {
-          // 只有响应确实是拼豆页面才更新应用壳缓存
+          // 只有响应确实是拼豆页面才更新应用壳缓存。
+          // 同时写 './' 与 './index.html' 两个键：ASSET_PATHS 里两者都在，
+          // 只更新其中一个会让另一个在离线时返回旧壳（见 REVIEW.md M6）
           if (resp && resp.ok && (await isPindouShell(resp))) {
-            const clone = resp.clone();
-            caches
-              .open(CACHE_NAME)
-              .then((cache) => cache.put(APP_SHELL_URL, clone));
+            const clones = [resp.clone(), resp.clone()];
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(APP_SHELL_URL, clones[0]);
+              cache.put(SCOPE_URL, clones[1]);
+            });
           }
           return resp;
         })
-        .catch(() => caches.match(APP_SHELL_URL))
+        .catch(async () => {
+          // 离线兜底：两个壳键都试一遍，任一存在即可返回
+          const hit = await caches.match(APP_SHELL_URL);
+          return hit || caches.match(SCOPE_URL);
+        })
     );
     return;
   }

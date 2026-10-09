@@ -45,6 +45,10 @@ const viewerHint3 = $('#viewerHint3');
 // 触摸设备检测
 const isTouchDevice = navigator.maxTouchPoints > 0;
 
+// 导出画布像素上限（MP）。iOS Safari 约 16.78MP（4096²），
+// 超过时 toBlob 会静默回 null 导致「点了没反应」（见 REVIEW.md C2）
+const MAX_EXPORT_MP = 16.78;
+
 // ----- 状态 -----
 const state = {
   image: null,
@@ -182,6 +186,13 @@ function closeCamera() {
   if (overlay) overlay.hidden = true;
 }
 
+// 页面被隐藏 / 关闭时必须释放摄像头，否则相机指示灯常亮、
+// 且在 iOS 上会一直占用设备（见 REVIEW.md M3）
+window.addEventListener('pagehide', closeCamera);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') closeCamera();
+});
+
 uploadZone.addEventListener('dragover', (e) => {
   e.preventDefault();
   uploadZone.classList.add('dragover');
@@ -225,6 +236,13 @@ function handleFile(file) {
       state.panY = 0;
       state.gridData = null;
       state.colorCounts = null;
+      state.rawGridData = null;
+      state.rawColorCounts = null;
+      // 简化强度与网格尺寸必须回到默认，否则新图会沿用上一张图的设置（C1 / m12）
+      resetSimplify();
+      state.gridW = 29;
+      state.gridH = 29;
+      $$('.grid-btn').forEach((b) => b.classList.toggle('active', b.dataset.w === '29'));
       showViewer();
     };
     img.src = ev.target.result;
@@ -630,14 +648,20 @@ simplifySlider.addEventListener('input', () => {
   }
 });
 
-// ============================================================
-// ============================================================
-// 5. 网格生成 + 色板映射
-// ============================================================
+/**
+ * 把简化强度清零，并同步滑块 DOM。
+ * 重新上传 / 重置时必须调用：否则新图会被上一张图的强度静默简化，
+ * 而滑块 UI 仍显示旧值，用户会误以为是新图本身的色彩问题（见 REVIEW.md C1）。
+ */
+function resetSimplify() {
+  state.simplify = 0;
+  simplifySlider.value = 0;
+  simplifyValue.textContent = '关闭';
+}
 
 // ============================================================
-// ============================================================
 // 5. 网格生成 + 色板映射
+// ============================================================
 function generateGrid() {
   if (!state.image) return;
 
@@ -663,10 +687,12 @@ function generateGrid() {
   offCtx.drawImage(state.image, 0, 0, sampleW, sampleH);
 
   // 选框像素坐标
-  const selX = Math.floor(x * sampleW);
-  const selY = Math.floor(y * sampleH);
-  const selW = Math.floor(w * sampleW);
-  const selH = Math.floor(h * sampleH);
+  // 夹取到图片范围内：选框由 UI 拖拽产生，x+w 可能 > 1（拖到右/下缘外），
+  // 不夹取会让后面的裁剪宽高算出负数（见 REVIEW.md M10）
+  const selX = clamp(Math.floor(x * sampleW), 0, sampleW - 1);
+  const selY = clamp(Math.floor(y * sampleH), 0, sampleH - 1);
+  const selW = Math.max(1, Math.min(Math.floor(w * sampleW), sampleW - selX));
+  const selH = Math.max(1, Math.min(Math.floor(h * sampleH), sampleH - selY));
 
   // ---- 选框内容完整放入网格（contain），居中，不裁剪 ----
   // 选框宽高比 vs 网格宽高比，计算内容在网格中占据的格数
@@ -711,17 +737,24 @@ function generateGrid() {
       // 映射到选框内的像素坐标
       const contentRow = row - offsetRow;
       const contentCol = col - offsetCol;
-      const cx = selX + (contentCol + 0.5) * cellSampW;
-      const cy = selY + (contentRow + 0.5) * cellSampH;
-      const winW = Math.max(2, Math.floor(cellSampW * 0.5));
-      const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 
-      const imageData = offCtx.getImageData(
-        Math.max(0, Math.floor(cx - winW / 2)),
-        Math.max(0, Math.floor(cy - winH / 2)),
-        Math.min(winW, sampleW - Math.floor(cx - winW / 2)),
-        Math.min(winH, sampleH - Math.floor(cy - winH / 2))
-      );
+      // 每格采样区 = 该格在选框内占据的完整矩形，相邻格首尾相接。
+      // 旧实现用「中心点 ± 半格窗口」，窗口边长只有 cellSamp*0.5，
+      // 导致相邻窗口之间空出半格宽的缝（见 REVIEW.md M11）：
+      // 实测 512→29 时整行 54.7% 的像素从未被采样，且缝隙随列号周期漂移，
+      // 等效固定相位梳状降采样，细纹理图会产生规律性串色。
+      // 改为按格边界取整，并保证 [x0, x1) 至少 1px、不超出画布。
+      let x0 = selX + Math.floor(contentCol * cellSampW);
+      let x1 = selX + Math.floor((contentCol + 1) * cellSampW);
+      let y0 = selY + Math.floor(contentRow * cellSampH);
+      let y1 = selY + Math.floor((contentRow + 1) * cellSampH);
+
+      x0 = clamp(x0, 0, sampleW - 1);
+      x1 = clamp(x1, x0 + 1, sampleW);
+      y0 = clamp(y0, 0, sampleH - 1);
+      y1 = clamp(y1, y0 + 1, sampleH);
+
+      const imageData = offCtx.getImageData(x0, y0, x1 - x0, y1 - y0);
 
       // 平均色
       let r = 0, g = 0, b = 0, count = 0;
@@ -754,7 +787,11 @@ function generateGrid() {
 
   // 保存原始映射数据（颜色简化用）
   state.rawGridData = grid.map(r => r.map(c => c ? { ...c } : null));
-  state.rawColorCounts = Array.from(colorMap.values()).map(c => ({ ...c }));
+  // 与 rebuildColorCounts 一致地按数量降序：否则 simplify=0 与 simplify>0
+  // 两条路径给出的统计表顺序不同，拖动滑块会看到表格重排（见 REVIEW.md M1）
+  state.rawColorCounts = Array.from(colorMap.values())
+    .map(c => ({ ...c }))
+    .sort((a, b) => b.count - a.count);
 
   // 应用颜色简化
   if (state.simplify > 0) {
@@ -1045,8 +1082,14 @@ function sharePNG() {
   const rows = grid.length;
   const cols = grid[0].length;
 
+  // 预检：超限时 toBlob 会静默回 null，这里先给出提示（见 REVIEW.md C2）
+  if (!checkExportSize(cols, rows)) return;
+
   downloadCanvas.toBlob((blob) => {
-    if (!blob) return;
+    if (!blob) {
+      showError('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
+      return;
+    }
     const file = new File([blob], `拼豆图纸_${cols}x${rows}.png`, { type: 'image/png' });
 
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1066,11 +1109,14 @@ function sharePNG() {
   }, 'image/png');
 }
 
-/** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
-function renderDownloadCanvas() {
-  const grid = state.gridData;
-  const rows = grid.length;
-  const cols = grid[0].length;
+/**
+ * 计算下载画布的实际像素尺寸。
+ * 抽出来供 renderDownloadCanvas 与 checkExportSize 共用，
+ * 避免预检用的尺寸与真实渲染尺寸各自演算而漂移（见 REVIEW.md C2）。
+ */
+function computeDownloadSize() {
+  const rows = state.gridData.length;
+  const cols = state.gridData[0].length;
 
   // 按网格宽高比计算单元格尺寸，避免图纸被拉伸
   const gridAspect = cols / rows;
@@ -1083,7 +1129,6 @@ function renderDownloadCanvas() {
     cellW = baseCell;
     cellH = Math.round(baseCell / gridAspect);
   }
-  const minCell = Math.min(cellW, cellH);
 
   const dpr = 2; // 2x 高清
   const padding = 16;
@@ -1093,11 +1138,40 @@ function renderDownloadCanvas() {
   const legendTop = rows * cellH + padding * 2 + titleHeight;
 
   const legendCols = 5;
-  const legendRows = Math.ceil(state.colorCounts.length / legendCols);
+  const legendRows = Math.ceil((state.colorCounts ? state.colorCounts.length : 0) / legendCols);
   const legendW = padding * 2 + legendCols * 180;
 
   const canvasW = Math.max(cols * cellW + padding * 2, legendW);
   const canvasH = legendTop + legendPadding + legendRows * legendItemHeight + padding;
+
+  return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, rows, cols };
+}
+
+/**
+ * 导出前的尺寸预检。
+ * iOS Safari 画布上限约 16.78MP（4096²），超过时 toBlob 静默回 null，
+ * 用户点了「下载」毫无反应。这里提前拦截并给出可操作的提示。
+ * 返回 true 表示可以继续导出。
+ */
+function checkExportSize(cols, rows) {
+  const { canvasW, canvasH, dpr } = computeDownloadSize();
+  const mp = (canvasW * dpr * canvasH * dpr) / 1e6;
+  if (mp > MAX_EXPORT_MP) {
+    showError(
+      `${cols}×${rows} 的图纸约 ${mp.toFixed(1)}MP，超出本设备浏览器上限（约 ${MAX_EXPORT_MP}MP），` +
+      `导出可能失败。建议改用 52×52 或更小的尺寸。`
+    );
+    return false;
+  }
+  return true;
+}
+
+/** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
+function renderDownloadCanvas() {
+  const {
+    canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight,
+    legendItemHeight, legendPadding, legendTop, rows, cols,
+  } = computeDownloadSize();
 
   downloadCanvas.width = canvasW * dpr;
   downloadCanvas.height = canvasH * dpr;
@@ -1198,15 +1272,32 @@ function downloadPNG() {
   const cols = state.gridData[0].length;
   const rows = state.gridData.length;
 
+  // 预检：超限时 toBlob 会静默回 null（见 REVIEW.md C2）
+  if (!checkExportSize(cols, rows)) return;
+
+  // iOS Safari 不支持 blob URL 的 <a download>，改为新窗口打开让用户长按保存。
+  // 必须在用户手势的调用栈内同步开窗 —— toBlob 回调是异步的，
+  // 在那里 window.open 会被弹窗拦截（见 REVIEW.md C2）。
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const iosWindow = isIOS ? window.open('', '_blank') : null;
+  if (isIOS && !iosWindow) {
+    showError('浏览器拦截了新窗口，请允许弹窗后重试下载');
+    return;
+  }
+
   // 触发下载
   downloadCanvas.toBlob((blob) => {
+    if (!blob) {
+      if (iosWindow) iosWindow.close();
+      showError('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
+      return;
+    }
     const url = URL.createObjectURL(blob);
-    // iOS Safari 不支持 blob URL 的 <a download>，改为新窗口打开让用户长按保存
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (isIOS) {
-      window.open(url, '_blank');
-      // URL 稍后释放，给浏览器打开窗口的时间
+      // 占位窗口已同步打开，这里只需把地址指过去
+      iosWindow.location.href = url;
+      // URL 稍后释放，给浏览器加载的时间
       setTimeout(() => URL.revokeObjectURL(url), 3000);
       return;
     }
@@ -1244,6 +1335,11 @@ $('#resetBtn').addEventListener('click', () => {
   state.colorCounts = null;
   state.rawGridData = null;
   state.rawColorCounts = null;
+  // 简化强度与网格尺寸回到默认，避免影响下一张图（C1 / m12）
+  resetSimplify();
+  state.gridW = 29;
+  state.gridH = 29;
+  $$('.grid-btn').forEach((b) => b.classList.toggle('active', b.dataset.w === '29'));
   // 清空画布，避免残留旧图片
   viewerCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
   selectionBox.classList.remove('visible');
@@ -1280,11 +1376,18 @@ generateGrid = function() {
   showLoading('正在生成图纸…');
   // 使用 requestAnimationFrame 避免阻塞 UI 更新
   requestAnimationFrame(() => {
-    _origGenerateGrid.call(this);
-    // 至少显示 300ms 避免闪烁
-    const elapsed = Date.now() - startTime;
-    const delay = Math.max(0, 300 - elapsed);
-    setTimeout(hideLoading, delay);
+    try {
+      _origGenerateGrid.call(this);
+    } catch (err) {
+      // 必须兜住：否则 hideLoading 永远不会执行，遮罩会永久卡死界面
+      console.error('生成图纸失败：', err);
+      showError('生成图纸失败，请调整选框后重试');
+    } finally {
+      // 至少显示 300ms 避免闪烁
+      const elapsed = Date.now() - startTime;
+      const delay = Math.max(0, 300 - elapsed);
+      setTimeout(hideLoading, delay);
+    }
   });
 };
 

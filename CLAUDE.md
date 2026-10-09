@@ -33,7 +33,7 @@ CLAUDE.md           — 项目文档（本文件）
 
 ## ⚠️ 代码结构约定（改代码前必读）
 
-`app.js` 当前 **1326 行、承载 12 个特性域、21 个函数、26 处顶层监听**，已进入临界区。
+`app.js` 当前 **1261 行、承载 12 个特性域、21 个函数、26 处顶层监听**，已进入临界区。
 **新增功能不得再堆入单文件。**
 
 **详见 [REFACTOR.md](REFACTOR.md)**，其中三条为强约束：
@@ -41,7 +41,7 @@ CLAUDE.md           — 项目文档（本文件）
 1. **新功能按特性域归位**（`js/` 下的 `input/` `viewer/` `pipeline/` `output/` `ui/`）；
    无归属时先讨论，不要默认写进主文件。
 2. **模块间不得直接互相调用**，跨领域一律经编排层（`main.js`）。
-3. **禁止对函数做猴补丁** —— 现存的 `generateGrid` 覆盖（`app.js:1277-1289`）是
+3. **禁止对函数做猴补丁** —— 现存的 `generateGrid` 覆盖（`app.js:1373-1386`）是
    **所有模块化尝试的硬阻塞**：任何 ESM 化都会在该行抛 `TypeError`。**改结构时第一件事就是拆掉它。**
 
 > 另注：`state` 有 **3 个字段实际使用但未声明**（`dragSelection` / `rawGridData` / `rawColorCounts`），
@@ -66,11 +66,11 @@ CLAUDE.md           — 项目文档（本文件）
 | `zoom` | 缩放倍率 (0.2~5) |
 | `panX/Y` | 平移偏移 |
 | `selection` | 选框归一化坐标 `{x, y, w, h}` (0~1) |
-| `gridW/H` | 目标网格尺寸 (15~104) |
+| `gridW/H` | 目标网格尺寸 (15~104)。**重新上传/重置时回到 29**（m12 已修） |
 | `gridData` | 二维数组，每个元素为 `{name, hex, r, g, b}` 或 `null`（空格） |
 | `colorCounts` | 按数量降序的颜色统计数组 |
 | `rawGridData/rawColorCounts` | 颜色简化前的原始数据（供 slider 回溯） |
-| `simplify` | 颜色简化强度 0-100，0=关闭。**注意：重新上传/重置时不会清零**，见 REVIEW.md C1 |
+| `simplify` | 颜色简化强度 0-100，0=关闭。**重新上传/重置时由 `resetSimplify()` 清零**（REVIEW.md C1 已修） |
 | `lastTouchDist/center` | 双指缩放/平移的触摸状态 |
 | `isPinching` | 是否正在进行双指操作 |
 | `dragStart` / `panStart` | ⚠️ **混用多套坐标语义**，见 REFACTOR.md §2.2 |
@@ -166,6 +166,13 @@ CLAUDE.md           — 项目文档（本文件）
 python3 -m http.server 8080
 # 然后访问 http://localhost:8080
 ```
+
+> **⚠️ 本机 `python` 不可用**：`python` / `python3` / `py` 均为 Windows Store 别名占位符，
+> 直接执行会以 **exit 9009** 失败（实测）。若需本地起服务，请用真实 Python 安装，
+> 或用 Node：
+> ```bash
+> npx --yes serve -l 8080 .
+> ```
 
 > **⚠️ 已决定改用原生 ESM（`<script type="module">`）** —— 见 [REFACTOR.md](REFACTOR.md) §4.1。
 > ESM 受 CORS 限制，`file://` 协议下无法加载模块，**因此"双击打开"不再可用**，这是已接受的代价。
