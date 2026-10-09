@@ -604,5 +604,20 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 > 后续审查应**主动构造越界/极端用例**，而非只用常规输入验证。此教训同样适用于
 > PLAN §4.6 的"待实测项"。
 
+**第三批修复期间的又一次自我更正（环境判断错误）**：
+6. 我曾在 CLAUDE.md 写下"**本机 `python` / `python3` / `py` 均不可用**，是 Store 别名占位符，
+   执行 exit 9009"。**该结论错误**，已更正。实测：
+   - `python` / `python3` → `%LOCALAPPDATA%\Programs\Python\Python314\python.exe`，**Python 3.14.8**
+   - `py` → Python 3.14.6
+   - `python -m http.server 8080` **正常提供本项目全部资源**（7 个 URL 均 200）
+
+   **真正的 exit 9009 只出现在「按完整路径直接调用 0 字节的 WindowsApps 别名」时**，
+   而按名字调用 `python` 会由 PATH 解析到真实安装，不受影响。
+
+   **出错原因**：我用 `Get-Command python` 取 `.Source` 后看路径里含 `WindowsApps` 就下了结论，
+   又用**与实际用法不一致的调用方式**验证（当时取的正是那个 0 字节别名）。
+   **教训：判断某命令是否可用，必须用与真实用法一致的调用方式去测**；
+   路径里出现 `WindowsApps` **不等于**不可用 —— 该目录同时存在 0 字节占位符与正常入口。
+
 **已决定但尚未实施的事项**（不在本报告问题清单内）：改用原生 ESM —— 见 CLAUDE.md「运行方式」
 与 [REFACTOR.md](REFACTOR.md) §4.1。代价是"双击 `index.html`"不再可用。

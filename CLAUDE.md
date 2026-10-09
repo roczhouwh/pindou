@@ -167,12 +167,18 @@ python3 -m http.server 8080
 # 然后访问 http://localhost:8080
 ```
 
-> **⚠️ 本机 `python` 不可用**：`python` / `python3` / `py` 均为 Windows Store 别名占位符，
-> 直接执行会以 **exit 9009** 失败（实测）。若需本地起服务，请用真实 Python 安装，
-> 或用 Node：
-> ```bash
-> npx --yes serve -l 8080 .
+> **本机 Python 环境（已实测）**：`python` / `python3` 均可用，实际指向
+> `%LOCALAPPDATA%\Programs\Python\Python314\python.exe`（**Python 3.14.8**），
+> `python -m http.server` 已验证可正常提供本项目的全部资源。
+>
+> ```powershell
+> python -m http.server 8080   # 或 python3，两者等价
 > ```
+>
+> ⚠️ **不要**直接按完整路径调用 `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe` ——
+> 那是 0 字节的 Store 别名占位符，会以 **exit 9009** 失败。
+> 按名字调用 `python` 时 PATH 解析到真实安装，不受影响。
+> （教训：判断命令是否可用要用与真实用法一致的调用方式，别用 `Get-Command` 取路径再执行。）
 
 > **⚠️ 已决定改用原生 ESM（`<script type="module">`）** —— 见 [REFACTOR.md](REFACTOR.md) §4.1。
 > ESM 受 CORS 限制，`file://` 协议下无法加载模块，**因此"双击打开"不再可用**，这是已接受的代价。
