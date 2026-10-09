@@ -505,6 +505,32 @@ body {
   font-weight: 500;
 }
 
+/* --- 全局提示条 --- */
+/* 必须独立于各 section 的显隐：导出/生成失败时 upload-section 已隐藏，
+   写进 #uploadError 的提示用户看不见（见 REVIEW.md C2 修复补充） */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: min(90vw, 420px);
+  padding: 12px 18px;
+  background: var(--danger);
+  color: #FFFFFF;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 1100; /* 高于 install-banner(500) 与 loading-overlay(1000)，低于 camera-overlay(2000) */
+  text-align: center;
+  animation: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* --- Install Banner --- */
 .install-banner {
   position: fixed;

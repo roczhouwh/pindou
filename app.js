@@ -255,6 +255,22 @@ function showError(msg) {
   uploadError.hidden = false;
 }
 
+/**
+ * 全局提示条。用于「上传阶段之后」的错误：
+ * #uploadError 位于 #uploadSection 内，而生成/导出时该分区已 hidden，
+ * 消息写进去用户根本看不见（这正是 C2 提示「点了没反应」的原因）。
+ * 这里用独立的固定定位元素，不受各分区显隐影响。
+ */
+let toastTimer = null;
+function showToast(msg, duration = 6000) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, duration);
+}
+
 // ============================================================
 // 2. 图片查看器
 // ============================================================
@@ -1087,7 +1103,7 @@ function sharePNG() {
 
   downloadCanvas.toBlob((blob) => {
     if (!blob) {
-      showError('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
+      showToast('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
       return;
     }
     const file = new File([blob], `拼豆图纸_${cols}x${rows}.png`, { type: 'image/png' });
@@ -1157,9 +1173,9 @@ function checkExportSize(cols, rows) {
   const { canvasW, canvasH, dpr } = computeDownloadSize();
   const mp = (canvasW * dpr * canvasH * dpr) / 1e6;
   if (mp > MAX_EXPORT_MP) {
-    showError(
+    showToast(
       `${cols}×${rows} 的图纸约 ${mp.toFixed(1)}MP，超出本设备浏览器上限（约 ${MAX_EXPORT_MP}MP），` +
-      `导出可能失败。建议改用 52×52 或更小的尺寸。`
+      `无法导出。请改用 52×52 或更小的尺寸。`
     );
     return false;
   }
@@ -1283,7 +1299,7 @@ function downloadPNG() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const iosWindow = isIOS ? window.open('', '_blank') : null;
   if (isIOS && !iosWindow) {
-    showError('浏览器拦截了新窗口，请允许弹窗后重试下载');
+    showToast('浏览器拦截了新窗口，请允许弹窗后重试下载');
     return;
   }
 
@@ -1291,7 +1307,7 @@ function downloadPNG() {
   downloadCanvas.toBlob((blob) => {
     if (!blob) {
       if (iosWindow) iosWindow.close();
-      showError('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
+      showToast('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
       return;
     }
     const url = URL.createObjectURL(blob);
@@ -1382,7 +1398,7 @@ generateGrid = function() {
     } catch (err) {
       // 必须兜住：否则 hideLoading 永远不会执行，遮罩会永久卡死界面
       console.error('生成图纸失败：', err);
-      showError('生成图纸失败，请调整选框后重试');
+      showToast('生成图纸失败，请调整选框后重试');
     } finally {
       // 至少显示 300ms 避免闪烁
       const elapsed = Date.now() - startTime;
