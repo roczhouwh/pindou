@@ -1144,7 +1144,7 @@ function computeDownloadSize() {
   const canvasW = Math.max(cols * cellW + padding * 2, legendW);
   const canvasH = legendTop + legendPadding + legendRows * legendItemHeight + padding;
 
-  return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, rows, cols };
+  return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, legendCols, rows, cols };
 }
 
 /**
@@ -1168,9 +1168,10 @@ function checkExportSize(cols, rows) {
 
 /** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
 function renderDownloadCanvas() {
+  const grid = state.gridData;
   const {
     canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight,
-    legendItemHeight, legendPadding, legendTop, rows, cols,
+    legendItemHeight, legendPadding, legendTop, legendCols, rows, cols,
   } = computeDownloadSize();
 
   downloadCanvas.width = canvasW * dpr;
@@ -1218,7 +1219,7 @@ function renderDownloadCanvas() {
   }
 
   // 第三遍：绘制色号文字
-  const fontSize = Math.max(5, Math.round(minCell * 0.35));
+  const fontSize = Math.max(5, Math.round(Math.min(cellW, cellH) * 0.35));
   ctx.font = `${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
