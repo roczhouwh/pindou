@@ -178,6 +178,32 @@ CLAUDE.md           — 项目文档（本文件）
 - `#previewInfo` 同时展示**导出倍率与像素尺寸**（降档时注明原因）与**极端比例警告**
 - 下载 PNG：较短边 28px，较长边按网格比例缩放，倍率自适应（见上）
 
+## 🧩 共用绘制/几何函数（新功能应复用，不要另写一份）
+
+> 这些是 REFACTOR §7.1 前四步抽出的公共实现。**PLAN 的行列标尺、A4 打印应直接复用
+> `drawGrid`**，不要新写绘制循环。改动它们前先看对应的守护套件。
+
+| 函数 | 职责 | 守护套件 |
+|---|---|---|
+| `computeImageRect(w, h)` | 图片在画布中的绘制矩形（contain + zoom/pan） | `test-compute-image-rect.js` |
+| `drawGrid(ctx, grid, opts)` | 网格三遍绘制：填色 / 网格线 / 色号 | `test-draw-grid.js` |
+| `pickTextColor(cell)` | 依 Rec.601 亮度选黑字或白字 | `test-draw-grid.js` |
+| `FONT_STACK` | 字体栈常量（**不要再硬编码字体串**） | `test-draw-grid.js` |
+
+> ⚠️ **`drawGrid` 的 4 个开关是"刻意保留的出口差异"，不要统一**
+> （详见 `drawGrid` 的 JSDoc 差异表）：
+>
+> | 开关 | 预览 | 导出 | 原因 |
+> |---|---|---|---|
+> | `hatchEmptyCells` | `true` | `false` | 预览画空格斜线，导出不画（用户定调） |
+> | `gridLineColor` | `0.15` | `0.25` | 导出供打印，需更清楚 |
+> | `textMinCell` | `10` | `null` | 预览小格不画字，导出总是画 |
+> | `roundFontSize` | `false` | `true` | 导出字号取整更稳 |
+>
+> ⚠️ **`computeImageRect` 必须保留 `w/h` 参数**：三个调用方的宽度来源**本就不同**
+> （`viewerCanvas.width` vs `getBoundingClientRect().width`），
+> 在 iOS 的 0 尺寸时序窗口内不相等。**让它自己取尺寸会改回已修的 iOS 缺陷。**
+
 ## PWA 相关
 
 - `manifest.json`：standalone 模式，indigo 主题色
@@ -259,3 +285,9 @@ python3 -m http.server 8080
 > 若只做静态预览而不涉及模块加载，可直接打开查看，但**功能不完整**。
 >
 > 仍不引入任何构建工具：原生 `import`/`export` 即可，无需 `package.json` 或打包步骤。
+>
+> **📌 现状（REFACTOR §7.1 前四步完成后）**：**ESM 尚未启用**，`index.html` 仍是裸 `<script src>`，
+> 代码仍全在 `app.js`（单文件共享作用域）。
+> 但**三个硬阻塞已全部解除**（猴补丁 / 坐标语义 / 重复逻辑），
+> 所以**现在未启用 ESM 是"选择"而非"受阻"** —— 启用前须先改造测试脚手架（§7.3），
+> 两者必须**同批**做。详见 [REFACTOR.md](REFACTOR.md) §7.1 与 §六 决策点 1。
