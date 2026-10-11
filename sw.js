@@ -19,7 +19,8 @@
 // v10：PLAN §五 第一批第 3 项 行列标尺（预览/导出共用 drawRuler + 自适应密度 + 开关）
 // v11：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/render.js（「5.9 网格绘制」整段搬迁）
 // v12：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/simplify.js（「5.5 颜色简化」整段搬迁）
-const CACHE_NAME = 'pindou-v12';
+// v13：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/grid.js（「5. 网格生成」整段搬迁）
+const CACHE_NAME = 'pindou-v13';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -32,6 +33,7 @@ const ASSET_PATHS = [
   // ---- 按 index.html 的加载顺序列出各模块（顺序即依赖）----
   './js/pipeline/render.js',
   './js/pipeline/simplify.js',
+  './js/pipeline/grid.js',
   './app.js',
   './manifest.json',
   './icon-192.png',
