@@ -20,7 +20,8 @@
 // v11：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/render.js（「5.9 网格绘制」整段搬迁）
 // v12：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/simplify.js（「5.5 颜色简化」整段搬迁）
 // v13：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/grid.js（「5. 网格生成」整段搬迁）
-const CACHE_NAME = 'pindou-v13';
+// v14：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/output/preview.js + js/output/stats.js
+const CACHE_NAME = 'pindou-v14';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -34,6 +35,8 @@ const ASSET_PATHS = [
   './js/pipeline/render.js',
   './js/pipeline/simplify.js',
   './js/pipeline/grid.js',
+  './js/output/preview.js',
+  './js/output/stats.js',
   './app.js',
   './manifest.json',
   './icon-192.png',
