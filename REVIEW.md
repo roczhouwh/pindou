@@ -173,11 +173,12 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 > 并用**真实像素缓冲**实现 canvas 2D 上下文），断言一律落在**用户可感知的输出**上。
 > 这套脚手架共 **106 条断言、11 个套件，全绿**。
 >
-> **📌 后续扩容**：建立后已扩过三轮 —— ① REFACTOR §七 复核加了 2 个探针；
+> **📌 后续扩容**：建立后已扩过四轮 —— ① REFACTOR §七 复核加了 2 个探针；
 > ② §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`；
 > ③ §7.1 步骤 2 / 3b / 4 各加一个套件（`test-compute-image-rect` /
-> `test-dragstart-semantics` / `test-draw-grid`）。
-> **当前为 19 套件 / 170 条断言**（见 §九 套件清单）。
+> `test-dragstart-semantics` / `test-draw-grid`）；④ PLAN §3.1 加 `test-simplify.js`、
+> **PLAN §3.5 加 `test-ruler.js`**。
+> **当前为 20 套件 / 188 条断言**（见 §九 套件清单）。
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -997,7 +998,7 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（**19 个套件 / 170 条断言**，全绿）
+### 套件清单（**20 个套件 / 188 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
@@ -1021,6 +1022,7 @@ node run-all.js          # 一键跑全部
 | `test-dragstart-semantics.js` | **REFACTOR §7.1 步 3b 拆 `dragStart`**：三字段语义各自独立、不得再次合并、不得跨语义混用（含 2 组负向对照） |
 | `test-draw-grid.js` | **REFACTOR §7.1 步 4 抽 `drawGrid`**：重复已消除、字体栈收敛、**4 处出口差异不得被统一**、黑白字两分支真实覆盖（含 3 组负向对照） |
 | `test-simplify.js` | **PLAN §3.1 近似色合并**：常开性（滑块归零仍生效）、序号决胜（色号不随尺寸漂移）、**合并表必须是静态色板级**（用纯 H12 图作判据）、如实告知、缓存（含 2 组负向对照） |
+| `test-ruler.js` | **PLAN §五 第一批第 3 项 行列标尺**：开关可访问性与状态语义（显示偏好，重上传不重置）、两个出口都画/都不画、密度自适应（大网格转每 5 格）、每 10 格参考线、**四档导出不被边距挤降 dpr**、预检与渲染尺寸一致、**关闭时画布尺寸精确回到基线**、窄屏不溢出（含负向对照） |
 | `probe-esm-cost.js` | ESM 化三处代价；**猴补丁形态已消失**（原为"存在"，已随步骤 1 更新） |
 | `probe-esm-exact.js` | REFACTOR §7.2 归因复核（真实 `.mjs` 模块四情形） |
 | `probe-harness-esm.js` | REFACTOR §7.3 安全网可保住（Node ESM + 真实 jsdom） |
@@ -1033,7 +1035,12 @@ node run-all.js          # 一键跑全部
 | 脚本 | 前置 | 作用 |
 |---|---|---|
 | `verify-browser.js` | `python -m http.server 8137` + `npm i ws` | **真实 Chrome**（CDP）端到端：真实上传→合并→预览文案→滑块拖动→真实导出 PNG，**10 项断言** |
+| `verify-ruler-browser.js` | `python -m http.server 8137` + `npm i ws` | **真实 Chrome** 验证行列标尺：**读真实像素**（`getImageData`）确认边距里真的画了字、关闭后深灰标尺像素归零、导出画布尺寸在限内、52×52 无横向滚动，**9 项断言** |
+| `shot-ruler.js` | 同上 | 截出预览（29/52/104）、导出画布、关闭对照图，供**人工核验观感** |
 | `probe-simplify-mutation.js` | 无 | **突变测试**：把 `app.js` 改回 4 种"旧行为"形态，断言 `test-simplify.js` **必须转红**；跑完自动逐字还原并校验一致性 |
+| `probe-ruler-mutation.js` | 无 | **突变测试**：8 种"看起来能跑但行为错"的标尺形态（含"导出不画""关掉仍加边距""边距不进尺寸"），断言 `test-ruler.js` 必须转红 |
+| `probe-ruler.js` | 无 | 复算标尺密度分档、四档导出尺寸（标尺开/关）、dpr 是否被挤降档 |
+| `probe-ruler-preview.js` | 无 | 六种视口宽度 × 三档网格的预览尺寸，验证不溢出容器 |
 | `probe-nearcolor.js` | 无 | 复算色板色对分布与各阈值下的合并结果（PLAN §3.1/§3.3 的数值均可由此复现） |
 | `probe-simplify-baseline.js` | 无 | 度量"改动前基线"（近白区域多出色号、色号随尺寸漂移） |
 
@@ -1042,6 +1049,12 @@ node run-all.js          # 一键跑全部
 > 用了"图上同时出现 E16 与 H12"的用例，而**这种图区分不出图像级与静态级**
 > （两种规则结果相同）。突变测试报"未被捕获"后才发现，改用**纯 H12 图**作判据才有效。
 > **教训：负向对照/突变测试不是形式，它抓到的是"断言看起来对、实际没约束力"这类隐性失效。**
+>
+> **`probe-ruler-mutation.js` 复现了同一类收益**：它抓到了 `test-ruler.js` 的一个真实漏洞 ——
+> "色号必须落在网格本体内"这条断言读的是 `computeDownloadSize().gridY`，
+> 而突变（`gridY` 漏加 `gutter`）会让**断言与实现一起偏移**、照样通过。
+> 补上一条独立钉住 `gridY === padding + titleHeight + gutter` 的断言后才拦住。
+> **教训：断言若与被测实现共享同一个数据来源，就会失去约束力 —— 必须有一条从"外部不变量"出发的判据。**
 
 ### 为什么要有 `verify-review-claims.js`
 

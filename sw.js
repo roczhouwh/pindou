@@ -15,7 +15,8 @@
 // v7：REFACTOR §7.1 步骤 3b 拆 dragStart 语义（dragStartImage / dragStartClient / panStartPan）
 // v8：REFACTOR §7.1 步骤 4 抽 drawGrid / pickTextColor / FONT_STACK（4 处出口差异参数化保留）
 // v9：PLAN §3.1 近似色常开合并（applySimplify 双层 + 静态色板级序号决胜 + #previewInfo 告知）
-const CACHE_NAME = 'pindou-v9';
+// v10：PLAN §五 第一批第 3 项 行列标尺（预览/导出共用 drawRuler + 自适应密度 + 开关）
+const CACHE_NAME = 'pindou-v10';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 const ASSET_PATHS = [

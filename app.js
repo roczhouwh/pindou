@@ -34,6 +34,7 @@ const customH = $('#customH');
 const applyCustom = $('#applyCustom');
 const simplifySlider = $('#simplifySlider');
 const simplifyValue = $('#simplifyValue');
+const rulerToggle = $('#rulerToggle');
 const cameraInput = $('#cameraInput');
 const cameraBtn = $('#cameraBtn');
 const shareBtn = $('#shareBtn');
@@ -120,6 +121,17 @@ const state = {
    * （只说"H12 没了"而不说"改用 E16"等于没说），不能悄悄替换。
    */
   mergedColors: [],
+  /**
+   * 是否显示**行列标尺**（PLAN §五 第一批第 3 项）：网格外侧的行列号
+   * + 每 10 格一条加粗参考线。默认开启。
+   *
+   * ⚠️ 与 `simplify` 的性质**不同**：simplify 是对图片的变换（因此重新上传要归零），
+   * 而标尺是**显示偏好** —— 用户关掉后不该每次上传都被强行打开，
+   * 所以 `handleFile()` **刻意不重置**它（这是有意为之，不是漏写）。
+   *
+   * 它只影响**绘制**，不参与采样与色号映射 —— 切换时无需重新生成网格。
+   */
+  rulerEnabled: true,
   // 拖拽状态
   isDragging: false,
   isResizing: false,
@@ -828,6 +840,16 @@ function resetSimplify() {
   simplifySlider.setAttribute('aria-valuetext', '关闭');
 }
 
+// 行列标尺开关（PLAN §五 第一批第 3 项）。
+// ⚠️ 它只影响**绘制**，不参与采样与色号映射 —— 因此**不重新生成网格**，
+// 只重绘预览。重新生成会白跑一次逐格采样（大网格下明显卡顿），且毫无必要。
+// 导出画布按需渲染（downloadPNG/sharePNG 里才调），故无需在此处理。
+rulerToggle.addEventListener('change', () => {
+  state.rulerEnabled = rulerToggle.checked;
+  if (state.gridData) renderPreview();
+  announce(state.rulerEnabled ? '已显示行列标尺' : '已隐藏行列标尺');
+});
+
 // ============================================================
 // 5. 网格生成 + 色板映射
 // ============================================================
@@ -1235,6 +1257,117 @@ function getStaticMergeMap(distSq) {
 const FONT_STACK = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 /**
+ * 行列标尺的**密度阈值**：格子短边 ≥ 此值时每格都标号，否则每 `RULER_STEP` 格标一次。
+ *
+ * 依据（本机实测）：预览最长边 720px，故短边随网格尺寸衰减 ——
+ * 29×29 约 24.8px、52×52 约 13.8px、78×78 约 9.2px、104×104 约 6.9px。
+ * 脚注字号取 `max(7, minCell * 0.5)`，13.8px 格下约 6.9px 已是可读下限。
+ *
+ * `14` 这个取值使 **29×29 走逐格、52×52 及以上走每 5 格**
+ * （可用 `.pindou-devtools/probe-ruler.js` 复现该分档表）。
+ */
+const RULER_DENSE_MIN_CELL = 14;
+/** 稀疏模式下的标注间隔（格）。每 5 格标一次，配合每 10 格的加粗参考线即可数清任何位置 */
+const RULER_STEP = 5;
+/** 加粗参考线的间隔（格）。十进制，与人类数数习惯一致 */
+const RULER_MAJOR_STEP = 10;
+
+/**
+ * 依格子尺寸决定标尺的绘制参数。**纯函数**，便于测试直接复用（不重算一遍规则）。
+ *
+ * @param {number} cellW 单元格宽（CSS px）
+ * @param {number} cellH 单元格高（CSS px）
+ * @returns {{step:number, majorStep:number, dense:boolean, fontSize:number, margin:number}}
+ *          `step` 为标注间隔（1 = 逐格）；`margin` 为边距外扩宽度（含线与文字）
+ */
+function rulerMetrics(cellW, cellH) {
+  const minCell = Math.min(cellW, cellH);
+  const dense = minCell >= RULER_DENSE_MIN_CELL;
+  const step = dense ? 1 : RULER_STEP;
+  // 脚注字号：与 drawGrid 的色号字号同源（0.35 比例），但下限定得更低（7px）——
+  // 标尺只是"数格子的辅助"，比色号（信息主体）容许更小。
+  const fontSize = Math.max(7, Math.round(minCell * 0.5));
+  // 边距 = 文字行高 + 少量留白。取整避免半像素导致的模糊
+  const margin = Math.ceil(fontSize * 1.6) + 2;
+  return { step, majorStep: RULER_MAJOR_STEP, dense, fontSize, margin };
+}
+
+/**
+ * 在网格**外侧**绘制行列号与十进制参考线（PLAN §五 第一批第 3 项「行列标尺」）。
+ *
+ * ⚠️ 本函数**只画边距区域**，网格本体仍由 `drawGrid()` 绘制 —— 调用方需先把网格
+ * 整体下移/右移 `margin`，并把 `margin` 传给本函数作为边距宽度。这样
+ * **预览与导出共用同一实现**，不出现"预览有、导出没有"的漂移。
+ *
+ * 坐标约定：`x`/`y` 是**网格本体**的左上角；标尺画在 `[x - margin, x)` 与
+ * `[y - margin, y)` 这条 L 形区域内。
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} opts
+ * @param {number} opts.x 网格本体左上角 x
+ * @param {number} opts.y 网格本体左上角 y
+ * @param {number} opts.cellW 单元格宽
+ * @param {number} opts.cellH 单元格高
+ * @param {number} opts.rows 行数
+ * @param {number} opts.cols 列数
+ * @param {number} opts.margin 边距宽度（来自 `rulerMetrics()`）
+ * @param {number} opts.step 标注间隔（1 = 逐格）
+ * @param {number} opts.majorStep 加粗参考线间隔
+ * @param {number} opts.fontSize 脚注字号
+ * @param {string} opts.lineColor 参考线颜色
+ * @param {string} opts.textColor 脚注文字颜色
+ */
+function drawRuler(ctx, opts) {
+  const {
+    x, y, cellW, cellH, rows, cols, margin, step, majorStep, fontSize,
+    lineColor, textColor,
+  } = opts;
+  const gridW = cols * cellW;
+  const gridH = rows * cellH;
+
+  ctx.save();
+
+  // ---- ① 十进制参考线：横贯整个网格，跨页拼接时靠它对齐 ----
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1;
+  for (let col = majorStep; col < cols; col += majorStep) {
+    const lx = Math.round(x + col * cellW) + 0.5;   // +0.5 让 1px 线落在像素中心，不发虚
+    ctx.beginPath();
+    ctx.moveTo(lx, y);
+    ctx.lineTo(lx, y + gridH);
+    ctx.stroke();
+  }
+  for (let row = majorStep; row < rows; row += majorStep) {
+    const ly = Math.round(y + row * cellH) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, ly);
+    ctx.lineTo(x + gridW, ly);
+    ctx.stroke();
+  }
+
+  // ---- ② 脚注文字：列号在网格上方、行号在网格左侧 ----
+  ctx.fillStyle = textColor;
+  ctx.font = `${fontSize}px ${FONT_STACK}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const labelY = y - margin / 2;          // 上方边距的垂直中心
+  const labelX = x - margin / 2;          // 左侧边距的水平中心
+
+  for (let col = step; col <= cols; col += step) {
+    // 标注的是"第几列"，取该列中心；末列标在网格右边缘内收半个格
+    const lx = x + (col - 1) * cellW + cellW / 2;
+    ctx.fillText(String(col), lx, labelY);
+  }
+  for (let row = step; row <= rows; row += step) {
+    const ly = y + (row - 1) * cellH + cellH / 2;
+    ctx.fillText(String(row), labelX, ly);
+  }
+
+  ctx.restore();
+}
+
+/**
  * 依格子颜色的**相对亮度**选择色号文字颜色，保证对比度。
  * 深色格配白字、浅色格配黑字（原在预览与导出各写一份，数学完全相同）。
  *
@@ -1352,6 +1485,60 @@ function drawGrid(ctx, grid, opts) {
 // 6. 图纸预览
 // ============================================================
 
+/**
+ * 预览网格的**小屏适配**尺寸计算（含标尺边距）。
+ *
+ * ⚠️ 为什么要迭代收敛（实测数据见 `.pindou-devtools/probe-ruler-scale.js`）：
+ * 标尺边距 `margin` 是**格子尺寸的函数** —— 缩放后格子变小，边距也跟着变小。
+ * 若只用"缩放前"的边距去算缩放比，最终的 `gutter` 会小于估算值，
+ * 于是画布比容器**窄**（无害但浪费空间）；反过来若先算出的比例再取整，
+ * 就会**超出**容器导致横向滚动条（实测 vw=390 时超出 7px）。
+ * 迭代到不动点即可稳定，3 次足够（边距单调不增，收敛很快）。
+ *
+ * 保留原实现的 **35% 下限**：极窄屏上宁可让容器横向滚动，也不把图纸缩到看不清
+ * （这是既有产品决策，不是缺陷 —— `style.css` 的 `.preview-container{overflow-x:auto}` 正为此存在）。
+ *
+ * @param {number} baseW 未缩放时的网格宽
+ * @param {number} baseH 未缩放时的网格高
+ * @param {number} cols 列数
+ * @param {number} rows 行数
+ * @param {number} maxW 容器可用宽度
+ * @param {number} padding 画布内边距
+ * @param {boolean} useRuler 是否开标尺
+ * @returns {{drawW:number, drawH:number}} 适配后的网格绘制尺寸
+ */
+function fitPreviewGrid(baseW, baseH, cols, rows, maxW, padding, useRuler) {
+  const MIN_SCALE = 0.35;
+  const gutterOf = (w, h) => (useRuler ? rulerMetrics(w / cols, h / rows).margin : 0);
+  const totalW = (w, h) => w + gutterOf(w, h) + padding * 2;
+
+  if (totalW(baseW, baseH) <= maxW) return { drawW: baseW, drawH: baseH };
+
+  const aspect = baseH / baseW;
+  const minW = Math.max(1, Math.floor(baseW * MIN_SCALE));
+
+  let scale = Math.max(MIN_SCALE, maxW / totalW(baseW, baseH));
+  let drawW = baseW;
+  for (let i = 0; i < 3; i++) {
+    // 用 floor 保证不因取整而超出（原实现用 round，实测会超出 1~5px）
+    drawW = Math.max(minW, Math.floor(baseW * scale));
+    const drawH = Math.max(1, Math.round(drawW * aspect));
+    const t = totalW(drawW, drawH);
+    if (t <= maxW) break;
+    scale *= maxW / t;    // 边距变化后重算比例，逐步收敛
+  }
+
+  // 兜底：仍超出则直接扣掉超出部分（仅在未触及 35% 下限时可能发生）
+  let drawW2 = Math.max(minW, drawW);
+  let drawH2 = Math.max(1, Math.round(drawW2 * aspect));
+  const over = totalW(drawW2, drawH2) - maxW;
+  if (over > 0 && drawW2 > minW) {
+    drawW2 = Math.max(minW, drawW2 - over);
+    drawH2 = Math.max(1, Math.round(drawW2 * aspect));
+  }
+  return { drawW: drawW2, drawH: drawH2 };
+}
+
 function renderPreview() {
   if (!state.gridData) return;
   previewSection.hidden = false;
@@ -1364,31 +1551,35 @@ function renderPreview() {
   // 选框内容完整放入网格（contain），留白居中，与选框形状一致。
   // （此前用正方形 cellSize 会把长方形网格拉伸，导致图纸与选框不一致）。
   const gridAspect = cols / rows;
-  let drawW, drawH;
+  let baseW, baseH;
   if (gridAspect >= 1) {
-    drawW = 720;
-    drawH = Math.round(720 / gridAspect);
+    baseW = 720;
+    baseH = Math.round(720 / gridAspect);
   } else {
-    drawH = 720;
-    drawW = Math.round(720 * gridAspect);
+    baseH = 720;
+    baseW = Math.round(720 * gridAspect);
   }
-  // 小屏适配：如果预览容器宽度小于画布宽度，按比例缩小
+
+  // 小屏适配（含标尺边距），见 fitPreviewGrid 的说明
   const previewContainer = previewCanvas.parentElement;
   const maxContainerW = previewContainer.clientWidth - 16; // 减去 padding 8px×2
-  if (drawW + 8 > maxContainerW) {
-    const scale = Math.max(0.35, maxContainerW / (drawW + 8));
-    drawW = Math.round(drawW * scale);
-    drawH = Math.round(drawH * scale);
-  }
+  const padding = 4;
+  const { drawW, drawH } = fitPreviewGrid(
+    baseW, baseH, cols, rows, maxContainerW, padding, state.rulerEnabled,
+  );
+
   // 单元格尺寸（长方形，保持网格真实比例）
   const cellW = drawW / cols;
   const cellH = drawH / rows;
 
   const dpr = window.devicePixelRatio || 1;
-  const padding = 4;
 
-  const canvasW = drawW + padding * 2;
-  const canvasH = drawH + padding * 2;
+  // 标尺边距（最终值，按适配后的格子尺寸）
+  const ruler = state.rulerEnabled ? rulerMetrics(cellW, cellH) : null;
+  const gutter = ruler ? ruler.margin : 0;
+
+  const canvasW = drawW + gutter + padding * 2;
+  const canvasH = drawH + gutter + padding * 2;
 
   previewCanvas.width = canvasW * dpr;
   previewCanvas.height = canvasH * dpr;
@@ -1402,11 +1593,15 @@ function renderPreview() {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvasW, canvasH);
 
+  // 网格本体位置：右下方各留出 gutter 给行列号（gutter=0 时与改动前完全一致）
+  const gridX = padding + gutter;
+  const gridY = padding + gutter;
+
   // 网格绘制（填色 + 网格线 + 色号）走共用实现。
   // 预览的差异项：画空格斜线、网格线 0.15、色号需 minCell≥10、字号不取整
   drawGrid(ctx, grid, {
-    x: padding,
-    y: padding,
+    x: gridX,
+    y: gridY,
     cellW,
     cellH,
     gridLineColor: 'rgba(0,0,0,0.15)',
@@ -1414,6 +1609,17 @@ function renderPreview() {
     textMinCell: 10,
     roundFontSize: false,
   });
+
+  // 行列标尺与网格共用同一实现（预览/导出不会漂移）
+  if (ruler) {
+    drawRuler(ctx, {
+      x: gridX, y: gridY, cellW, cellH, rows, cols,
+      margin: gutter, step: ruler.step, majorStep: ruler.majorStep,
+      fontSize: ruler.fontSize,
+      lineColor: 'rgba(0,0,0,0.45)',
+      textColor: '#333333',
+    });
+  }
 
   previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格${exportScaleNote()}`;
   // 近似色合并是**静默改变用户产出**的行为：用户会发现自己按图买的色号
@@ -1539,18 +1745,30 @@ function computeDownloadSize() {
   const titleHeight = 40;
   const legendItemHeight = 28;
   const legendPadding = 16;
-  const legendTop = rows * cellH + padding * 2 + titleHeight;
+
+  // 行列标尺边距（关闭时为 0 → 与改动前逐像素一致）。
+  // ⚠️ 它同时进入 canvasW/canvasH，因此 **dpr 判定与预检都自动跟着走**，
+  // 不需要在 checkExportSize 里再补一次（那会造成"预检与实际渲染漂移"，见 REVIEW.md C2）。
+  // 实测四档：29/52 仍 2x，78/104 仍 1x —— 边距没有把任何一档挤下 4096 单边或 16.78MP。
+  const ruler = state.rulerEnabled ? rulerMetrics(cellW, cellH) : null;
+  const gutter = ruler ? ruler.margin : 0;
+
+  // 标题占位 + 边距：网格本体下移 gutter 给列号让位
+  const gridY = padding + titleHeight + gutter;
+  const legendTop = gridY + rows * cellH + padding;
 
   const legendCols = 5;
   const legendRows = Math.ceil((state.colorCounts ? state.colorCounts.length : 0) / legendCols);
   const legendW = padding * 2 + legendCols * 180;
 
-  const canvasW = Math.max(cols * cellW + padding * 2, legendW);
+  // 网格居中（与原实现一致）：故左右各得 (canvasW - cols*cellW)/2，
+  // 该值 ≥ gutter/2 + padding > gutter，标尺画得下且左右对称。
+  const canvasW = Math.max(cols * cellW + padding * 2 + gutter, legendW);
   const canvasH = legendTop + legendPadding + legendRows * legendItemHeight + padding;
 
   const dpr = pickExportDpr(canvasW, canvasH);
 
-  return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, legendCols, rows, cols };
+  return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, legendCols, rows, cols, gutter, ruler, gridY };
 }
 
 /**
@@ -1621,6 +1839,7 @@ function renderDownloadCanvas() {
   const {
     canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight,
     legendItemHeight, legendPadding, legendTop, legendCols, rows, cols,
+    gutter, ruler, gridY,
   } = computeDownloadSize();
 
   downloadCanvas.width = canvasW * dpr;
@@ -1639,9 +1858,9 @@ function renderDownloadCanvas() {
   ctx.textAlign = 'center';
   ctx.fillText(`拼豆图纸 ${cols}×${rows}`, canvasW / 2, padding + 28);
 
-  // 绘制网格
+  // 绘制网格。gridY 由 computeDownloadSize 给出（已含标尺边距），
+  // 与预检/尺寸计算**共用同一个来源**，不会漂移。
   const gridX = (canvasW - cols * cellW) / 2;
-  const gridY = padding + titleHeight;
 
   // 网格绘制（填色 + 网格线 + 色号）走共用实现。
   // 导出的差异项：**不画**空格斜线、网格线 0.25、色号总是画、字号取整
@@ -1655,6 +1874,17 @@ function renderDownloadCanvas() {
     textMinCell: null,          // null = 不受阈值限制，总是画色号
     roundFontSize: true,
   });
+
+  // 行列标尺（与预览共用 drawRuler，不另写一份绘制循环）
+  if (ruler) {
+    drawRuler(ctx, {
+      x: gridX, y: gridY, cellW, cellH, rows, cols,
+      margin: gutter, step: ruler.step, majorStep: ruler.majorStep,
+      fontSize: ruler.fontSize,
+      lineColor: 'rgba(0,0,0,0.45)',
+      textColor: '#333333',
+    });
+  }
 
   // 图例
   const legendStartY = legendTop;

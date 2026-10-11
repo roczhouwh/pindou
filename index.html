@@ -125,6 +125,15 @@
             <span class="simplify-value" id="simplifyValue">关闭</span>
           </div>
         </div>
+        <!-- 行列标尺：52×52 以上靠肉眼数格子必错（PLAN §2.2 P0）。
+             用 <label for> 关联，可访问名称即「行列标尺」——复选框自身表达开关状态，
+             不需要再造 aria-valuetext（与简化滑块不同，它没有"读数"）。 -->
+        <div class="control-group ruler-group">
+          <label class="ruler-toggle" for="rulerToggle">
+            <input type="checkbox" id="rulerToggle" checked>
+            <span class="control-label">行列标尺</span>
+          </label>
+        </div>
         <div class="control-group">
           <button id="downloadBtn" class="btn btn-primary" disabled
                   aria-describedby="downloadHint">📥 下载 PNG</button>

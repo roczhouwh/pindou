@@ -345,6 +345,31 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Ruler Control --- */
+/* 与简化滑块同构：label 包住控件，点文字也能切换（触屏上尤其重要） */
+.ruler-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ruler-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  margin: 0;
+  /* 触摸设备上 16px 命中区偏小，扩大到 24px（不改变视觉尺寸） */
+  padding: 4px;
+  box-sizing: content-box;
+}
+
+/* .control-label 默认 text-transform: uppercase，中文无影响；此处仅去掉 letter-spacing 观感更紧凑 */
+.ruler-toggle .control-label {
+  letter-spacing: 0.02em;
+}
+
 /* --- Buttons --- */
 .btn {
   padding: 8px 16px;
