@@ -23,7 +23,9 @@
 // v14：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/output/preview.js + js/output/stats.js
 // v15：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/output/export.js + js/ui/a11y.js
 //      + js/core/dom.js + js/core/state.js（核心层，**必须最先加载**）
-const CACHE_NAME = 'pindou-v15';
+// v16：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/viewer/
+//      viewer.js + selection.js + panzoom.js（「2. 图片查看器」+「3. 矩形选框」）
+const CACHE_NAME = 'pindou-v16';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -40,6 +42,9 @@ const ASSET_PATHS = [
   './js/pipeline/render.js',
   './js/pipeline/simplify.js',
   './js/pipeline/grid.js',
+  './js/viewer/viewer.js',
+  './js/viewer/selection.js',
+  './js/viewer/panzoom.js',
   './js/output/preview.js',
   './js/output/stats.js',
   './js/output/export.js',
