@@ -32,7 +32,7 @@ CLAUDE.md           — 项目文档（本文件）
 
 > **改代码前先读 [REVIEW.md](REVIEW.md)** —— 特别是 §五「明确核实"没问题"的项」，
 > 避免为"修问题"而改坏**本来正确**的代码。
-> **§九 说明了怎么跑回归测试**（16 个套件 / 136 条断言）。
+> **§九 说明了怎么跑回归测试**（17 个套件 / 145 条断言）。
 
 > **🧪 回归测试**（脚手架在仓库**之外**：`F:\claudeapp\demo\.pindou-devtools\`，刻意不污染零依赖交付物）：
 > ```powershell
@@ -68,10 +68,10 @@ CLAUDE.md           — 项目文档（本文件）
 > `1 拆猴补丁 → 2 抽 computeImageRect → 3b 拆 dragStart → 4 抽 drawGrid`
 > `→（改造测试脚手架）→ 0 改 ESM → 5 模块搬迁 → 6 拆 pointermove`
 >
-> **进度**：**✅ 步骤 1（拆猴补丁）、步骤 2（抽 `computeImageRect`）均已完成**
-> （下一步：步骤 3b 拆 `dragStart` 语义）。
+> **进度**：**✅ 步骤 1（拆猴补丁）、步骤 2（抽 `computeImageRect`）、
+> 步骤 3b（拆 `dragStart` 语义）均已完成**（下一步：步骤 4 抽 `drawGrid()`）。
 > **关键点**：前四步**不碰模块系统**，可全程在 `run-all.js` 保护下完成
-> （现有 **16 套件 / 136 断言**，退出码 0 = 全绿）；
+> （现有 **17 套件 / 145 断言**，退出码 0 = 全绿）；
 > **步骤 0 会先让脚手架失效**（它靠 `window.eval` 拼接两文件，与 ESM 不兼容），
 > 所以必须与脚手架改造同批做。**先做有保护的，再做破坏保护的。**
 
@@ -131,7 +131,7 @@ CLAUDE.md           — 项目文档（本文件）
 | `touchStartCenter` | 双指手势**起点**中心点。平移位移相对它累计（M2 已修，不要改回单帧增量） |
 | `isPinching` | 是否正在进行双指操作 |
 | `aspectWarning` | 极端宽高比的量化偏差提示文本（无则 `null`），由 `generateGrid` 写入、`renderPreview` 展示（M9） |
-| `dragStart` / `panStart` | ⚠️ **混用多套坐标语义**，见 REFACTOR.md §2.2（**不要当 bug "修"**） |
+| `dragStartImage` / `dragStartClient` / `panStartPan` | ✅ **语义已拆开**（REFACTOR §2.2 步骤 3b）：分别为**归一化图片坐标** / **client 像素坐标** / **pan 偏移量起点**。此前挤在一个 `dragStart`/`panStart` 里（同名不同形状）。**不要合并回去，也不要跨语义混用**（`test-dragstart-semantics.js` 守护） |
 
 ## 色板 (color-palette.js)
 

@@ -12,7 +12,8 @@
 // 否则 cache-first 会让老用户一直拿到旧文件、看不到更新（见 REVIEW.md 相关说明）
 // v5：REFACTOR §7.1 步骤 1 拆猴补丁（generateGrid 入口化 + generateGridCore）
 // v6：REFACTOR §7.1 步骤 2 抽 computeImageRect（viewport 变换数学 3 份 → 1 份）
-const CACHE_NAME = 'pindou-v6';
+// v7：REFACTOR §7.1 步骤 3b 拆 dragStart 语义（dragStartImage / dragStartClient / panStartPan）
+const CACHE_NAME = 'pindou-v7';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 const ASSET_PATHS = [

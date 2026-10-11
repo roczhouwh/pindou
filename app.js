@@ -99,16 +99,27 @@ const state = {
   isResizing: false,
   isPanning: false,
   /**
-   * ⚠️ 承载**两种语义**（REFACTOR.md §2.2，改动前务必看清）：
-   * - 选框拖拽时写入**归一化图片坐标** `{ix, iy}`
-   * - 右键平移时写入 **client 像素坐标** `{x, y}`
+   * 选框拖拽**起点**，**归一化图片坐标** `{ix, iy}`（0~1）。
+   * 与 client 像素坐标无关 —— 换算靠 `getImageCoords()`。
    */
-  dragStart: { x: 0, y: 0 },
+  dragStartImage: { ix: 0, iy: 0 },
+  /**
+   * 右键平移**起点**，**client 像素坐标** `{x, y}`（e.clientX 同量纲）。
+   *
+   * ⚠️ 与 `dragStartImage` 是**两种完全不同的坐标语义**，此前两者共用同一个
+   * `state.dragStart` 字段（同名不同形状），已按 REFACTOR.md §2.2 拆开。
+   * **不要**再把它们合并回一个字段，也不要拿其中一个去另一个的公式里用。
+   */
+  dragStartClient: { x: 0, y: 0 },
   dragHandle: null,
   /** 拖拽开始时的选框快照（归一化） */
   dragSelection: null,
-  /** 右键平移开始时的 pan 偏移量 */
-  panStart: { x: 0, y: 0 },
+  /**
+   * 平移（右键拖拽 / 双指）**起点**的 pan 偏移量 `{x: panX, y: panY}`。
+   * 位移必须相对它累计：`panX = panStartPan.x + 总位移`
+   * （双指见 REVIEW.md M2，右键见 isPanning 分支）。
+   */
+  panStartPan: { x: 0, y: 0 },
   // 触摸状态
   lastTouchDist: 0,
   /** 上一帧的双指中心点（用于算缩放比与单帧增量） */
@@ -510,13 +521,13 @@ viewerWrapper.addEventListener('pointerdown', (e) => {
   if (inside) {
     // 移动选框
     state.isDragging = true;
-    state.dragStart = { ix, iy };
+    state.dragStartImage = { ix, iy };
     state.dragSelection = { ...sel };
     viewerWrapper.setPointerCapture(e.pointerId);
   } else {
     // 开始新的框选
     state.isDragging = true;
-    state.dragStart = { ix, iy };
+    state.dragStartImage = { ix, iy };
     state.dragSelection = { x: ix, y: iy, w: 0, h: 0 };
     viewerWrapper.setPointerCapture(e.pointerId);
   }
@@ -561,7 +572,7 @@ document.addEventListener('pointermove', (e) => {
   if (state.isDragging) {
     const coords = getImageCoords(e.clientX, e.clientY);
     const { ix, iy } = coords;
-    const ds = state.dragStart;
+    const ds = state.dragStartImage;   // 归一化图片坐标
 
     if (state.dragSelection.w === 0 && state.dragSelection.h === 0) {
       // 正在框选
@@ -607,8 +618,9 @@ document.addEventListener('pointermove', (e) => {
   }
 
   if (state.isPanning) {
-    state.panX = state.panStart.x + (e.clientX - state.dragStart.x);
-    state.panY = state.panStart.y + (e.clientY - state.dragStart.y);
+    // 两者都是 client 像素坐标，量纲一致（见 state.dragStartClient 的说明）
+    state.panX = state.panStartPan.x + (e.clientX - state.dragStartClient.x);
+    state.panY = state.panStartPan.y + (e.clientY - state.dragStartClient.y);
     scheduleViewerRedraw();
   }
 });
@@ -637,8 +649,9 @@ viewerWrapper.addEventListener('contextmenu', (e) => e.preventDefault());
 viewerWrapper.addEventListener('pointerdown', (e) => {
   if (e.button === 2) {
     state.isPanning = true;
-    state.panStart = { x: state.panX, y: state.panY };
-    state.dragStart = { x: e.clientX, y: e.clientY };
+    state.panStartPan = { x: state.panX, y: state.panY };
+    // client 像素坐标 —— 与 dragStartImage 的归一化坐标是两套语义，勿混用
+    state.dragStartClient = { x: e.clientX, y: e.clientY };
     viewerWrapper.classList.add('panning');
     viewerWrapper.setPointerCapture(e.pointerId);
   }
@@ -668,7 +681,7 @@ viewerWrapper.addEventListener('touchstart', (e) => {
     // （那样 panX 恒等于"起点 + 最后一帧的微小位移"，位移不累积，见 REVIEW.md M2）
     state.touchStartCenter = { ...state.lastTouchCenter };
     state.isPinching = true;
-    state.panStart = { x: state.panX, y: state.panY };
+    state.panStartPan = { x: state.panX, y: state.panY };
   }
 }, { passive: false });
 
@@ -693,8 +706,8 @@ viewerWrapper.addEventListener('touchmove', (e) => {
     // 实测 10 帧每帧 +10px 只产生 10px 位移，且位移量与帧数无关（见 REVIEW.md M2）
     const dx = center.x - state.touchStartCenter.x;
     const dy = center.y - state.touchStartCenter.y;
-    state.panX = state.panStart.x + dx;
-    state.panY = state.panStart.y + dy;
+    state.panX = state.panStartPan.x + dx;
+    state.panY = state.panStartPan.y + dy;
     state.lastTouchCenter = center;
 
     renderViewer();

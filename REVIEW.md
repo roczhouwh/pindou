@@ -174,7 +174,7 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 >
 > **📌 后续扩容**：建立后已扩过两轮 —— 先是 REFACTOR §七 复核加了 2 个探针，
 > 再是 §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`。
-> **当前为 16 套件 / 136 条断言**（见 §九 套件清单）。
+> **当前为 17 套件 / 145 条断言**（见 §九 套件清单）。
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -819,7 +819,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | 问题 | 严重度 | 状态 |
 |---|---|---|
 | `generateGrid` 被猴补丁覆盖 —— **所有 ESM 化的硬阻塞** | 🔴 阻塞重构 | ✅ **已拆除**（REFACTOR §7.1 步骤 1 完成：加载状态移入 `generateGrid()` 入口，真实实现拆为 `generateGridCore()`；`test-patch-removal.js` 守护） |
-| `dragStart` / `panStart` 混用 **3 套坐标语义** | 🔴 阻塞重构 | 📝 已在 `state` 声明处**标注两套语义**，未拆分 |
+| `dragStart` / `panStart` 混用 **3 套坐标语义** | 🔴 阻塞重构 | ✅ **已拆分**（REFACTOR §7.1 步骤 3b）：`dragStartImage` / `dragStartClient` / `panStartPan`，**只改名拆字段、行为零变化**（§2.2 澄清它不是 bug）；`test-dragstart-semantics.js` 守护 |
 | `state` 有 **3 个字段实际使用但未声明** | 🟠 | ✅ **已补齐声明**（含新增的 `touchStartCenter` / `aspectWarning`） |
 | `pointermove` 无节流无 rAF 合并 | 🟠 性能 | ✅ **已修复**（每帧合并，见 §〇之四） |
 | viewport 变换数学**重复 3 份** | 🟡 | ✅ **已抽取**（REFACTOR §7.1 步骤 2）：三处共用 `computeImageRect(w, h)`，两种宽度来源差异按 §7.4 要求**刻意保留**；`test-compute-image-rect.js` 守护 |
@@ -990,7 +990,7 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（**16 个套件 / 136 条断言**，全绿）
+### 套件清单（**17 个套件 / 145 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
@@ -1011,6 +1011,7 @@ node run-all.js          # 一键跑全部
 | `test-m2-proof.js` | M2 缺陷的算术复现（作为**历史证据**保留） |
 | `test-patch-removal.js` | **REFACTOR §7.1 步 1 拆猴补丁**：遮罩生命周期（含抛错不卡死）+ rAF 时序契约 + 猴补丁不得复活 |
 | `test-compute-image-rect.js` | **REFACTOR §7.1 步 2 抽 `computeImageRect`**：数学正确性、三处一致性、**两种宽度来源不得被统一**（含负向对照） |
+| `test-dragstart-semantics.js` | **REFACTOR §7.1 步 3b 拆 `dragStart`**：三字段语义各自独立、不得再次合并、不得跨语义混用（含 2 组负向对照） |
 | `probe-esm-cost.js` | ESM 化三处代价；**猴补丁形态已消失**（原为"存在"，已随步骤 1 更新） |
 | `probe-esm-exact.js` | REFACTOR §7.2 归因复核（真实 `.mjs` 模块四情形） |
 | `probe-harness-esm.js` | REFACTOR §7.3 安全网可保住（Node ESM + 真实 jsdom） |
