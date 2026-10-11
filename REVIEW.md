@@ -174,7 +174,7 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 >
 > **📌 后续扩容**：建立后已扩过两轮 —— 先是 REFACTOR §七 复核加了 2 个探针，
 > 再是 §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`。
-> **当前为 15 套件 / 128 条断言**（见 §九 套件清单）。
+> **当前为 16 套件 / 136 条断言**（见 §九 套件清单）。
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -822,7 +822,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | `dragStart` / `panStart` 混用 **3 套坐标语义** | 🔴 阻塞重构 | 📝 已在 `state` 声明处**标注两套语义**，未拆分 |
 | `state` 有 **3 个字段实际使用但未声明** | 🟠 | ✅ **已补齐声明**（含新增的 `touchStartCenter` / `aspectWarning`） |
 | `pointermove` 无节流无 rAF 合并 | 🟠 性能 | ✅ **已修复**（每帧合并，见 §〇之四） |
-| viewport 变换数学**重复 3 份** | 🟡 | ⏳ 仍在（REFACTOR §3.1 的抽取项） |
+| viewport 变换数学**重复 3 份** | 🟡 | ✅ **已抽取**（REFACTOR §7.1 步骤 2）：三处共用 `computeImageRect(w, h)`，两种宽度来源差异按 §7.4 要求**刻意保留**；`test-compute-image-rect.js` 守护 |
 | 网格三遍绘制**重复 2 份**（且预览画斜线、导出不画） | 🟡 行为不一致 | ⏳ 仍在（抽取时须保留这个差异） |
 | `selectionOverlay` 是**死引用** | ⚪ | ✅ **已删除** |
 
@@ -990,7 +990,7 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（**15 个套件 / 128 条断言**，全绿）
+### 套件清单（**16 个套件 / 136 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
@@ -1010,6 +1010,7 @@ node run-all.js          # 一键跑全部
 | `test-e2e.js` | 全链路 + C1/m12/M10/M11 回归 |
 | `test-m2-proof.js` | M2 缺陷的算术复现（作为**历史证据**保留） |
 | `test-patch-removal.js` | **REFACTOR §7.1 步 1 拆猴补丁**：遮罩生命周期（含抛错不卡死）+ rAF 时序契约 + 猴补丁不得复活 |
+| `test-compute-image-rect.js` | **REFACTOR §7.1 步 2 抽 `computeImageRect`**：数学正确性、三处一致性、**两种宽度来源不得被统一**（含负向对照） |
 | `probe-esm-cost.js` | ESM 化三处代价；**猴补丁形态已消失**（原为"存在"，已随步骤 1 更新） |
 | `probe-esm-exact.js` | REFACTOR §7.2 归因复核（真实 `.mjs` 模块四情形） |
 | `probe-harness-esm.js` | REFACTOR §7.3 安全网可保住（Node ESM + 真实 jsdom） |

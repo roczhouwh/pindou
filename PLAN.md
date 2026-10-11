@@ -18,7 +18,7 @@
 |---|---|
 | 版本 | v0.5.1（commit `8c82225`）之上，已含 REVIEW 第一/二/三批修复 |
 | 分支 | `master` |
-| sw.js 缓存名 | `pindou-v5` |
+| sw.js 缓存名 | `pindou-v6` |
 
 ### ⚠️ 代码审查 37 项问题已全部处理完毕
 
@@ -32,7 +32,7 @@
 
 > **§五执行顺序无需变更**：第一批三项中「导出修复」已由自适应倍率完成，
 > 剩余「近似色合并」「行列标尺」优先级不变，且**都不受本轮改动阻塞**。
-> **新增回归测试**（`F:\claudeapp\demo\.pindou-devtools\run-all.js`，**15 套件 / 128 断言**）
+> **新增回归测试**（`F:\claudeapp\demo\.pindou-devtools\run-all.js`，**16 套件 / 136 断言**）
 > 可在开发这两项时随时验证"没改坏既有功能" —— 这正是 REFACTOR.md §五 所指出的
 > "无测试覆盖是最大风险"的补救。
 
@@ -562,7 +562,7 @@
 
 ```powershell
 cd F:\claudeapp\demo\.pindou-devtools
-node run-all.js      # 15 套件 / 128 断言，退出码 0 = 全绿
+node run-all.js      # 16 套件 / 136 断言，退出码 0 = 全绿
 ```
 
 它**加载真实的 `index.html` + `app.js`**（不复制逻辑），并用**真实像素缓冲**实现 canvas，
