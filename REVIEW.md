@@ -171,6 +171,10 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 > **真实 DOM 行为测试**（`jsdom` 加载**真实的 `index.html` + `color-palette.js` + `app.js`**，
 > 并用**真实像素缓冲**实现 canvas 2D 上下文），断言一律落在**用户可感知的输出**上。
 > 这套脚手架共 **106 条断言、11 个套件，全绿**。
+>
+> **📌 后续扩容**：建立后已扩过两轮 —— 先是 REFACTOR §七 复核加了 2 个探针，
+> 再是 §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`。
+> **当前为 15 套件 / 128 条断言**（见 §九 套件清单）。
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -814,7 +818,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 
 | 问题 | 严重度 | 状态 |
 |---|---|---|
-| `generateGrid` 被猴补丁覆盖 —— **所有 ESM 化的硬阻塞** | 🔴 阻塞重构 | ⏳ **仍在**（ESM 未开工，见 REFACTOR §2.1） |
+| `generateGrid` 被猴补丁覆盖 —— **所有 ESM 化的硬阻塞** | 🔴 阻塞重构 | ✅ **已拆除**（REFACTOR §7.1 步骤 1 完成：加载状态移入 `generateGrid()` 入口，真实实现拆为 `generateGridCore()`；`test-patch-removal.js` 守护） |
 | `dragStart` / `panStart` 混用 **3 套坐标语义** | 🔴 阻塞重构 | 📝 已在 `state` 声明处**标注两套语义**，未拆分 |
 | `state` 有 **3 个字段实际使用但未声明** | 🟠 | ✅ **已补齐声明**（含新增的 `touchStartCenter` / `aspectWarning`） |
 | `pointermove` 无节流无 rAF 合并 | 🟠 性能 | ✅ **已修复**（每帧合并，见 §〇之四） |
@@ -854,7 +858,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | 事项 | 为什么没做 | 建议 |
 |---|---|---|
 | **C2 分块渲染** | 会改变产出物形态（多图/多次 toBlob），属产品决策 | 若要进一步降桌面端峰值内存与卡顿，仍推荐做 |
-| **原生 ESM 迁移** | 见 REFACTOR.md §4.1；已决策但未实施 | 猴补丁（REFACTOR §2.1）仍在，是 ESM 化的硬阻塞 |
+| **原生 ESM 迁移** | 见 REFACTOR.md §4.1；已决策但未实施 | 猴补丁阻塞**已解除**（REFACTOR §7.1 步骤 1 完成），现在只剩"改造测试脚手架"这一前置（§7.3） |
 | **`dragStart` 双语义拆分** | REFACTOR §2.2，属结构债非缺陷 | 本轮已在 `state` 声明处标注两套语义，**不要再当 bug"修"** |
 | **`n8` `findNearestColor` 对 NaN 退化为 A1** | 当前调用链不可达 | 保留记录，改采样路径时注意 |
 | **`REGEXP`/ESLint 完整接入** | 本机无 ESLint 依赖，且项目刻意零依赖 | 已有 `lint-noundef.js` 覆盖**本报告真实踩过**的那类错误 |
@@ -986,7 +990,7 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（11 个套件 / 106 条断言，全绿）
+### 套件清单（**15 个套件 / 128 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
@@ -1005,6 +1009,10 @@ node run-all.js          # 一键跑全部
 | `test-a11y.js` | 可访问名称、`aria-live` 播报、键盘通路、判据统一 |
 | `test-e2e.js` | 全链路 + C1/m12/M10/M11 回归 |
 | `test-m2-proof.js` | M2 缺陷的算术复现（作为**历史证据**保留） |
+| `test-patch-removal.js` | **REFACTOR §7.1 步 1 拆猴补丁**：遮罩生命周期（含抛错不卡死）+ rAF 时序契约 + 猴补丁不得复活 |
+| `probe-esm-cost.js` | ESM 化三处代价；**猴补丁形态已消失**（原为"存在"，已随步骤 1 更新） |
+| `probe-esm-exact.js` | REFACTOR §7.2 归因复核（真实 `.mjs` 模块四情形） |
+| `probe-harness-esm.js` | REFACTOR §7.3 安全网可保住（Node ESM + 真实 jsdom） |
 
 ### 为什么要有 `verify-review-claims.js`
 

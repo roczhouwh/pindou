@@ -796,7 +796,47 @@ function resetSimplify() {
 // ============================================================
 // 5. 网格生成 + 色板映射
 // ============================================================
+/**
+ * 生成图纸的**唯一入口**（编排：加载遮罩 + 帧调度 + 错误兜底）。
+ *
+ * ⚠️ **时序契约（REFACTOR.md §7.4 步 1 要求显式化）**：
+ * 真实生成被推迟到 `requestAnimationFrame`，因此**本函数返回时
+ * `state.gridData` / `state.colorCounts` 仍是上一轮的数据**。
+ * 调用后立刻读这两个字段会读到旧值；需要新数据请在下一帧之后再读。
+ * 步骤 5 搬迁模块时务必保留此语义，否则会出现"偶发读到上一轮"的 bug。
+ *
+ * 收尾放在 `finally` 是必须的：真实生成一旦抛错，`hideLoading()` 将永不执行，
+ * 加载遮罩会**永久卡死界面**（这正是下方 catch 存在的理由）。
+ *
+ * > 本函数此前是「函数声明 + 文件末尾猴补丁整体覆盖」的形态，
+ * > 已按 REFACTOR.md §2.1 拆除。**不要再对函数做猴补丁** —— 它是模块化的硬阻塞。
+ */
 function generateGrid() {
+  const startTime = Date.now();
+  showLoading('正在生成图纸…');
+  // 用 rAF 把重活推到下一帧：先让遮罩真正画出来，再阻塞主线程采样
+  requestAnimationFrame(() => {
+    try {
+      generateGridCore();
+    } catch (err) {
+      // 必须兜住：否则 hideLoading 永远不会执行，遮罩会永久卡死界面
+      console.error('生成图纸失败：', err);
+      showToast('生成图纸失败，请调整选框后重试');
+    } finally {
+      // 至少显示 300ms 避免闪烁
+      const elapsed = Date.now() - startTime;
+      setTimeout(hideLoading, Math.max(0, 300 - elapsed));
+    }
+  });
+}
+
+/**
+ * 真实的网格生成实现（逐格采样 → 色板映射 → 颜色简化 → 预览 + 统计）。
+ *
+ * **请勿直接调用** —— 走 `generateGrid()` 入口，否则加载遮罩不会被驱动，
+ * 用户观感就是"点了没反应"（见 CLAUDE.md「按阶段选对函数」的同类教训）。
+ */
+function generateGridCore() {
   if (!state.image) return;
 
   const { x, y, w, h } = state.selection;
@@ -1665,6 +1705,9 @@ function clamp(val, min, max) {
 // ============================================================
 // 9. 加载状态
 // ============================================================
+// 说明：加载遮罩原先靠文件末尾的「猴补丁整体覆盖 generateGrid」接入，
+// 已按 REFACTOR.md §2.1 拆除 —— 现在由 generateGrid() 入口**显式**驱动，
+// showLoading / hideLoading 就在这里定义，被入口直接调用。
 
 function showLoading(msg) {
   loadingText.textContent = msg || '正在处理…';
@@ -1674,28 +1717,6 @@ function showLoading(msg) {
 function hideLoading() {
   loadingOverlay.hidden = true;
 }
-
-// 在 generateGrid 中包裹加载状态
-const _origGenerateGrid = generateGrid;
-generateGrid = function() {
-  const startTime = Date.now();
-  showLoading('正在生成图纸…');
-  // 使用 requestAnimationFrame 避免阻塞 UI 更新
-  requestAnimationFrame(() => {
-    try {
-      _origGenerateGrid.call(this);
-    } catch (err) {
-      // 必须兜住：否则 hideLoading 永远不会执行，遮罩会永久卡死界面
-      console.error('生成图纸失败：', err);
-      showToast('生成图纸失败，请调整选框后重试');
-    } finally {
-      // 至少显示 300ms 避免闪烁
-      const elapsed = Date.now() - startTime;
-      const delay = Math.max(0, 300 - elapsed);
-      setTimeout(hideLoading, delay);
-    }
-  });
-};
 
 // ============================================================
 // 10. 安装提示 (PWA)
