@@ -177,7 +177,7 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 > ② §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`；
 > ③ §7.1 步骤 2 / 3b / 4 各加一个套件（`test-compute-image-rect` /
 > `test-dragstart-semantics` / `test-draw-grid`）。
-> **当前为 18 套件 / 156 条断言**（见 §九 套件清单）。
+> **当前为 19 套件 / 170 条断言**（见 §九 套件清单）。
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -997,7 +997,7 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（**18 个套件 / 156 条断言**，全绿）
+### 套件清单（**19 个套件 / 170 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
@@ -1020,9 +1020,28 @@ node run-all.js          # 一键跑全部
 | `test-compute-image-rect.js` | **REFACTOR §7.1 步 2 抽 `computeImageRect`**：数学正确性、三处一致性、**两种宽度来源不得被统一**（含负向对照） |
 | `test-dragstart-semantics.js` | **REFACTOR §7.1 步 3b 拆 `dragStart`**：三字段语义各自独立、不得再次合并、不得跨语义混用（含 2 组负向对照） |
 | `test-draw-grid.js` | **REFACTOR §7.1 步 4 抽 `drawGrid`**：重复已消除、字体栈收敛、**4 处出口差异不得被统一**、黑白字两分支真实覆盖（含 3 组负向对照） |
+| `test-simplify.js` | **PLAN §3.1 近似色合并**：常开性（滑块归零仍生效）、序号决胜（色号不随尺寸漂移）、**合并表必须是静态色板级**（用纯 H12 图作判据）、如实告知、缓存（含 2 组负向对照） |
 | `probe-esm-cost.js` | ESM 化三处代价；**猴补丁形态已消失**（原为"存在"，已随步骤 1 更新） |
 | `probe-esm-exact.js` | REFACTOR §7.2 归因复核（真实 `.mjs` 模块四情形） |
 | `probe-harness-esm.js` | REFACTOR §7.3 安全网可保住（Node ESM + 真实 jsdom） |
+
+### 未接入 `run-all.js` 的验证脚本（按需手动跑）
+
+以下脚本需要**本机特定条件**（真实浏览器 / 需先起 HTTP 服务），不适合每次回归都跑，
+但**开发相关功能时应当跑一遍**：
+
+| 脚本 | 前置 | 作用 |
+|---|---|---|
+| `verify-browser.js` | `python -m http.server 8137` + `npm i ws` | **真实 Chrome**（CDP）端到端：真实上传→合并→预览文案→滑块拖动→真实导出 PNG，**10 项断言** |
+| `probe-simplify-mutation.js` | 无 | **突变测试**：把 `app.js` 改回 4 种"旧行为"形态，断言 `test-simplify.js` **必须转红**；跑完自动逐字还原并校验一致性 |
+| `probe-nearcolor.js` | 无 | 复算色板色对分布与各阈值下的合并结果（PLAN §3.1/§3.3 的数值均可由此复现） |
+| `probe-simplify-baseline.js` | 无 | 度量"改动前基线"（近白区域多出色号、色号随尺寸漂移） |
+
+> ⚠️ **`probe-simplify-mutation.js` 的价值**：它**实测证明断言不是空的**。
+> 本轮它真的抓到了一个问题 —— 最初写 `test-simplify.js` 时，"静态色板级"一条
+> 用了"图上同时出现 E16 与 H12"的用例，而**这种图区分不出图像级与静态级**
+> （两种规则结果相同）。突变测试报"未被捕获"后才发现，改用**纯 H12 图**作判据才有效。
+> **教训：负向对照/突变测试不是形式，它抓到的是"断言看起来对、实际没约束力"这类隐性失效。**
 
 ### 为什么要有 `verify-review-claims.js`
 

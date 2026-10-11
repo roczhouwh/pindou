@@ -66,6 +66,22 @@ const MAX_EXPORT_SIDE = 4096;
 // 期望的导出倍率（2x 高清）。设备允许时会用满，否则自动下调。
 const MAX_EXPORT_DPR = 2;
 
+/**
+ * **常开**近似色合并的阈值（**平方**距离 —— `colorDistance()` 返回的就是平方值）。
+ *
+ * `16` ⟺ 欧氏距离 `dist = 4`。依据是本仓库实测的色板分布（见 PLAN §3.1，
+ * 可用 `.pindou-devtools/probe-nearcolor.js` 复现）：
+ * 全色板 24,310 个色对中，`dist < 4` 的**只有 3 对**（2.83 / 2.83 / 3.74），
+ * 而 `dist < 6` 有 10 对、`dist < 8` 有 16 对。
+ *
+ * 故取**下限 4** —— 只并掉"肉眼无法分辨"的那几对，是风险最小的起点；
+ * 是否放宽到 6 待观察真实图纸后再定（PLAN §3.1 明确要求"先窄后宽"）。
+ *
+ * ⚠️ 这一层**独立于「简化滑块」常开**：滑块是用户主动的强度选择，
+ * 而近似色合并是针对"色板自身存在的近同色对"的修正，默认状态就必须生效。
+ */
+const AUTO_MERGE_DIST_SQ = 16;
+
 // ----- 状态 -----
 // ⚠️ 所有字段必须在**此处**声明后再使用（REFACTOR.md §2.3 的教训：
 // 此前 dragSelection / rawGridData / rawColorCounts 是运行时动态挂上去的"影子字段"，
@@ -94,6 +110,16 @@ const state = {
   rawColorCounts: null,
   /** 极端宽高比导致的量化偏差提示（无则 null），由 generateGrid 写入、renderPreview 展示 */
   aspectWarning: null,
+  /**
+   * 本轮因**近似色合并**而消失的色号，每项形如 `{ from: "H12", to: "E16" }`
+   * （无合并时为空数组）。
+   *
+   * 由 `applySimplify()` 写入、`renderPreview()` 展示。
+   * 存在的理由：合并是**静默改变用户产出**的行为 —— 用户会发现自己按图买的
+   * H12 在图纸上根本不存在。必须如实告知，且要给出**替代色号**
+   * （只说"H12 没了"而不说"改用 E16"等于没说），不能悄悄替换。
+   */
+  mergedColors: [],
   // 拖拽状态
   isDragging: false,
   isResizing: false,
@@ -1000,14 +1026,12 @@ function generateGridCore() {
     .map(c => ({ ...c }))
     .sort((a, b) => b.count - a.count);
 
-  // 应用颜色简化
-  if (state.simplify > 0) {
-    applySimplify();
-  } else {
-    // 必须是独立副本，不能 `state.gridData = state.rawGridData`（见上方 ①②）
-    state.gridData = cloneGrid(state.rawGridData);
-    state.colorCounts = state.rawColorCounts;
-  }
+  // 应用颜色简化。
+  // ⚠️ **无论滑块是否为 0 都必须走 `applySimplify()`** —— 它内含
+  // 「常开近似色合并」层（针对色板自身的近同色对，见该函数 JSDoc）。
+  // 此前 `simplify <= 0` 时走的是"直接复制 raw"的旁路，导致默认状态下
+  // 近同色对原样存在、凭空多出色号（PLAN §3.1 的缺陷）。
+  applySimplify();
 
   renderPreview();
   renderStats();
@@ -1043,27 +1067,49 @@ function rebuildColorCounts(grid) {
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
 
-/** 基于 rawGridData 重新计算简化后的 gridData 和 colorCounts */
+/**
+ * 基于 rawGridData 重新计算简化后的 gridData 和 colorCounts。
+ *
+ * 合并分**两层**，这是 PLAN §3.1 定下的结构（勿合并回单一层）：
+ *
+ * ┌ ① **常开近似色合并** —— 恒定为 `AUTO_MERGE_DIST_SQ`（dist ≤ 4），与滑块无关。
+ * │   针对的是**色板自身的缺陷**：221 色里存在几对肉眼无法分辨的近同色
+ * │   （最近一对 E16/H12 距离仅 2.83），最近邻匹配会在它们之间抖动，
+ * │   凭空多出色号 → 污染统计、抬高采购量、预览出噪点。
+ * │   滑块拉回 0 也**仍然生效** —— 这不是用户的强度选择，而是数据修正。
+ * │   旧实现在 `threshold <= 0` 时直接早返回、完全跳过合并循环，
+ * │   所以默认状态（simplify=0）下这些近同色对**原样存在** —— 这正是本次要修的。
+ * │
+ * └ ② **滑块合并** —— `simplify > 0` 时的用户主动压缩，在层 ① 之上继续合并。
+ *
+ * ⚠️ **决胜规则：色板序号较小者优先，不按采样频率**（PLAN §3.1 已决）。
+ * 旧实现按频率决胜（低频并入高频），后果是**同一张图换网格尺寸后色号会漂移** ——
+ * 采样网格一变、频率排序就变、主色随之改变。实测证据（改动前基线，可复现）：
+ * 同一张近白测试图在 `simplify=30%` 下，**29×29 得 `E16`、52×52 得 `H12`**。
+ * 用户按 29×29 的图纸买了 E16，改看 52×52 时色号变成 H12 —— 对按图采购是硬伤。
+ * 「色号可复现」是图纸工具的基本要求，故改用固定规则。
+ *
+ * ⚠️ **合并关系是"静态色板级"，与图上出现了哪些色无关**（见 `getStaticMergeMap`）。
+ * 这是上一条能成立的**前提**，不是可选优化：若改成"只在图上出现过的色里选目标"，
+ * 则同一张图 29×29 可能只出现 H12（图内无 E16 可并，H12 保留）、
+ * 52×52 同时出现两者（H12 并入 E16）—— **漂移依旧存在**，等于白改。
+ */
 function applySimplify() {
   const threshold = state.simplify;
   const raw = state.rawGridData;
   if (!raw) return;
 
-  if (threshold <= 0) {
-    // 独立副本，不能共享 rawGridData 的行数组（见 REVIEW.md n7）
-    state.gridData = cloneGrid(state.rawGridData);
-    state.colorCounts = state.rawColorCounts;
-    return;
-  }
-
-  // 将简化值 0-100 映射到平方距离阈值
-  // 100 → 5000（≈ RGB 每通道差 ~40，相当激进）
-  const maxDistSq = (threshold / 100) * 5000;
+  // 合并阈值：层 ① 常开；层 ② 仅在用户拖动滑块时叠加。
+  // 取两者的较大值 —— 滑块调到小档位（如 1% → 平方 50）不应把层 ① 反而关掉。
+  const sliderDistSq = threshold > 0 ? (threshold / 100) * 5000 : 0;
+  const maxDistSq = Math.max(AUTO_MERGE_DIST_SQ, sliderDistSq);
   if (maxDistSq <= 0) {
-    // 不可达（threshold<=0 已在上方返回），但早返回会让 gridData 停留在旧值、
-    // 与新的 simplify 不一致 —— 补齐而不是留一个静默退出（见 REVIEW.md m13）
+    // 当前不可达（AUTO_MERGE_DIST_SQ 恒 > 0），保留以防该常量将来被改成 0。
+    // 早返回会让 gridData 停留在旧值、与新的 simplify 不一致 ——
+    // 必须补齐 state 同步，而不是留一个静默退出（见 REVIEW.md m13）
     state.gridData = cloneGrid(state.rawGridData);
     state.colorCounts = state.rawColorCounts;
+    state.mergedColors = [];
     return;
   }
 
@@ -1073,54 +1119,7 @@ function applySimplify() {
   // 深拷贝一份原始网格（格子对象也要独立，见 cloneGrid 注释）
   const grid = cloneGrid(raw);
 
-  // 统计颜色频率（从原始数据）
-  const freq = new Map();
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cell = raw[r][c];
-      if (!cell) continue;
-      const key = cell.hex;
-      freq.set(key, (freq.get(key) || 0) + 1);
-    }
-  }
-
-  // 按频率降序排列颜色
-  const sorted = [...freq.entries()]
-    .map(([hex, count]) => ({ hex, count, color: PERLER_PALETTE.find(p => p.hex === hex) }))
-    .filter(x => x.color)
-    .sort((a, b) => b.count - a.count);
-
-  // 从低频到高频，为每个颜色找更常见的相近色进行合并
-  const mergeMap = new Map(); // source hex → target hex
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const src = sorted[i];
-    let bestDist = Infinity;
-    let bestTarget = null;
-
-    for (let j = 0; j < i; j++) {
-      const tgt = sorted[j];
-      const d = colorDistance(src.color, tgt.color);
-      if (d < bestDist) {
-        bestDist = d;
-        bestTarget = tgt;
-      }
-    }
-
-    if (bestTarget && bestDist <= maxDistSq) {
-      mergeMap.set(src.hex, bestTarget.hex);
-    }
-  }
-
-  // 解析合并链：A→B, B→C => A→C
-  for (const [src, tgt] of mergeMap) {
-    let resolved = tgt;
-    const seen = new Set([src]);
-    while (mergeMap.has(resolved) && !seen.has(resolved)) {
-      seen.add(resolved);
-      resolved = mergeMap.get(resolved);
-    }
-    mergeMap.set(src, resolved);
-  }
+  const mergeMap = getStaticMergeMap(maxDistSq);
 
   // 执行合并
   const paletteMap = new Map(PERLER_PALETTE.map(p => [p.hex, p]));
@@ -1136,8 +1135,93 @@ function applySimplify() {
     }
   }
 
+  // 记录被丢弃的**色号名**，供 renderPreview 如实告知用户。
+  // 只记图上**确实出现过**且被并掉的 —— 不夸大影响：
+  // 色板级合并在阈值 4 时会并掉 4 个色号，但一张图通常只涉及其中一两个。
+  const mergedColors = [];
+  const seenHex = new Set();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = raw[r][c];
+      if (!cell || seenHex.has(cell.hex)) continue;
+      seenHex.add(cell.hex);
+      if (!mergeMap.has(cell.hex)) continue;
+      const src = paletteMap.get(cell.hex);
+      const dst = paletteMap.get(mergeMap.get(cell.hex));
+      if (src && dst) mergedColors.push({ from: src.name, to: dst.name });
+    }
+  }
+
   state.gridData = grid;
   state.colorCounts = rebuildColorCounts(grid);
+  // 按源色号名排序，保证提示文案稳定（不随扫描顺序变化）
+  state.mergedColors = mergedColors.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+}
+
+/**
+ * `getStaticMergeMap()` 的阈值 → 合并表缓存。
+ *
+ * 必要性：滑块 `input` 会随拖动连续触发，而每次算表都要做 221²/2 ≈ 24,310 次
+ * 距离比较。滑块取值有限（0-100 共 101 档，外加常开层 1 档），缓存后
+ * 每个阈值只算一次。
+ *
+ * ⚠️ 必须声明在 `getStaticMergeMap()` **之前**：`const` 有暂时性死区（TDZ），
+ * 声明在使用之后虽然当前调用时序不会踩到，但一旦将来有代码在脚本加载完成前
+ * 触发合并，就会抛 ReferenceError。顺序即契约，不要调换。
+ */
+const staticMergeCache = new Map();
+
+/**
+ * **静态色板级**合并表：`source hex → target hex`。
+ * 只由色板本身与阈值决定，与当前图片、采样尺寸、颜色频率**全部无关**。
+ *
+ * 这就是"色号可复现"的实现基础：同一张图不论导出成 29×29 还是 104×104，
+ * 每个格子都查同一张映射表，不存在"换个尺寸色号就变"的可能。
+ *
+ * 规则：对每个色板颜色 p，在**序号比它小**的色板颜色中找最近者 q；
+ * 距离 ≤ 阈值则 p → q。等价于"**色板序号较小者优先**"（PLAN §3.1 已决）。
+ * 最后做链式解析（p→q, q→r ⇒ p→r），带环保护。
+ *
+ * **副作用（已实测确认并接受）**：会有若干色号**永久不可达** ——
+ * 阈值 4 时是 4 个（`G18/H12/H17/H21`），阈值 6 时 9 个。
+ * 这是"固定规则决胜"的必然代价：任何固定规则都会让输的一方不可达；
+ * 换来的是跨分辨率一致，且被并掉的两色**肉眼无法分辨**（实测距离 ≤ 4；
+ * 本仓库实测 `dist < 4` 全色板仅 3 对）。数据见 `probe-nearcolor.js`。
+ *
+ * @param {number} distSq 平方距离阈值（`colorDistance()` 的量纲）
+ * @returns {Map<string, string>} 源色号 hex → 目标色号 hex
+ */
+function getStaticMergeMap(distSq) {
+  const cached = staticMergeCache.get(distSq);
+  if (cached) return cached;
+
+  const rawMap = new Map(); // idx → idx（未解析链）
+  for (let i = 0; i < PERLER_PALETTE.length; i++) {
+    const p = PERLER_PALETTE[i];
+    let bestSq = Infinity;
+    let best = -1;
+    // 只在**序号更小**的候选里找 —— 这就是"序号小者胜出"的实现方式
+    for (let j = 0; j < i; j++) {
+      const d = colorDistance(p, PERLER_PALETTE[j]);
+      if (d < bestSq) { bestSq = d; best = j; }
+    }
+    if (best >= 0 && bestSq <= distSq) rawMap.set(i, best);
+  }
+
+  // 链式解析：i→j, j→k ⇒ i→k
+  const resolved = new Map();
+  for (const [i, j0] of rawMap) {
+    let cur = j0;
+    const seen = new Set([i]);
+    while (rawMap.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      cur = rawMap.get(cur);
+    }
+    resolved.set(PERLER_PALETTE[i].hex, PERLER_PALETTE[cur].hex);
+  }
+
+  staticMergeCache.set(distSq, resolved);
+  return resolved;
 }
 
 // ============================================================
@@ -1332,6 +1416,14 @@ function renderPreview() {
   });
 
   previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格${exportScaleNote()}`;
+  // 近似色合并是**静默改变用户产出**的行为：用户会发现自己按图买的色号
+  // （如 H12）在图纸上根本不存在。必须如实告知**并给出替代色号** ——
+  // 只说"H12 没了"而不说"改用 E16"等于没说
+  // （CLAUDE.md：用户可感知的输出必须落在用户看得见的地方）。
+  if (state.mergedColors && state.mergedColors.length) {
+    const list = state.mergedColors.map((m) => `${m.from}→${m.to}`).join('、');
+    previewInfo.textContent += ` · 已合并近似色：${list}`;
+  }
   // 极端比例提示：与预览信息同处，用户一眼能看到（见 REVIEW.md M9）
   previewInfo.classList.toggle('preview-warning', !!state.aspectWarning);
   if (state.aspectWarning) {
@@ -1738,6 +1830,7 @@ $('#resetBtn').addEventListener('click', () => {
   state.colorCounts = null;
   state.rawGridData = null;
   state.rawColorCounts = null;
+  state.mergedColors = [];
   // 简化强度与网格尺寸回到默认，避免影响下一张图（C1 / m12）
   resetSimplify();
   state.gridW = 29;
