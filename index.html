@@ -210,6 +210,12 @@
   </main>
 
   <script src="color-palette.js"></script>
+  <!-- ⚠️ 顺序即依赖：render.js 定义 drawGrid / drawRuler / pickTextColor / FONT_STACK，
+       后面 app.js 的 renderPreview 与 renderDownloadCanvas 会调用它们。
+       裸 script 之间共享全局词法环境（**顺序错了会落入 TDZ**，实测抛 ReferenceError）。
+       此阶段刻意不用 type="module" —— 步骤 0 尚未执行。 -->
+  <script src="js/pipeline/render.js"></script>
+  <script src="js/pipeline/simplify.js"></script>
   <script src="app.js"></script>
   <script>
     // Service Worker 注册。

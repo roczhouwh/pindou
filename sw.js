@@ -8,23 +8,31 @@
 // 3. 导航请求：先走网络（让任何项目都能加载自己的首页）；离线时退回缓存的
 //    拼豆应用壳，且只有内容确实是拼豆页面才进缓存，防止存进别的项目首页。
 
-// ⚠️ 任何对 index.html / app.js / color-palette.js / style.css 的改动都必须递增此版本号，
-// 否则 cache-first 会让老用户一直拿到旧文件、看不到更新（见 REVIEW.md 相关说明）
+// ⚠️ 任何对 index.html / js 下的模块 / app.js / color-palette.js / style.css 的改动
+// 都必须递增此版本号，否则 cache-first 会让老用户一直拿到旧文件、看不到更新
+// （见 REVIEW.md 相关说明）
 // v5：REFACTOR §7.1 步骤 1 拆猴补丁（generateGrid 入口化 + generateGridCore）
 // v6：REFACTOR §7.1 步骤 2 抽 computeImageRect（viewport 变换数学 3 份 → 1 份）
 // v7：REFACTOR §7.1 步骤 3b 拆 dragStart 语义（dragStartImage / dragStartClient / panStartPan）
 // v8：REFACTOR §7.1 步骤 4 抽 drawGrid / pickTextColor / FONT_STACK（4 处出口差异参数化保留）
 // v9：PLAN §3.1 近似色常开合并（applySimplify 双层 + 静态色板级序号决胜 + #previewInfo 告知）
 // v10：PLAN §五 第一批第 3 项 行列标尺（预览/导出共用 drawRuler + 自适应密度 + 开关）
-const CACHE_NAME = 'pindou-v10';
+// v11：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/render.js（「5.9 网格绘制」整段搬迁）
+// v12：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/pipeline/simplify.js（「5.5 颜色简化」整段搬迁）
+const CACHE_NAME = 'pindou-v12';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
+// ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
+//    且因为 cache-first，老用户会一直拿到旧代码（项目历史上踩过，见文件头注释）。
 const ASSET_PATHS = [
   './',
   './index.html',
   './style.css',
-  './app.js',
   './color-palette.js',
+  // ---- 按 index.html 的加载顺序列出各模块（顺序即依赖）----
+  './js/pipeline/render.js',
+  './js/pipeline/simplify.js',
+  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
