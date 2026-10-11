@@ -212,11 +212,18 @@
   <script src="color-palette.js"></script>
   <!-- ⚠️ 顺序即依赖，**层次不能颠倒**。裸 script 之间共享全局词法环境，
        顺序错了会抛 TDZ 错误（真实 Chrome 实测：`Cannot access '$' before initialization`）。
-       层次：core（DOM 引用 / state）→ pipeline（绘制·简化·生成）
-             → output（预览/统计/导出）→ ui（a11y）→ app.js（主逻辑与事件装配）
+       层次：core（DOM 引用 / state）→ input / pipeline / viewer
+             → output → ui → main.js（编排层，最后加载）
        此阶段刻意不用 type="module" —— 步骤 0 尚未执行。 -->
   <script src="js/core/dom.js"></script>
   <script src="js/core/state.js"></script>
+  <!-- ⚠️ camera.js 必须排在 upload.js **之前**：
+       upload.js 顶层注册了 `window.addEventListener('pagehide', closeCamera)`，
+       注册时会**立即求值** closeCamera —— 若 camera.js 尚未加载就会抛
+       `ReferenceError: closeCamera is not defined`。
+       反向依赖（camera.js 调 handleFile）发生在函数体内、执行时才求值，故不受顺序影响。 -->
+  <script src="js/input/camera.js"></script>
+  <script src="js/input/upload.js"></script>
   <script src="js/pipeline/render.js"></script>
   <script src="js/pipeline/simplify.js"></script>
   <script src="js/pipeline/grid.js"></script>
@@ -227,7 +234,10 @@
   <script src="js/output/stats.js"></script>
   <script src="js/output/export.js"></script>
   <script src="js/ui/a11y.js"></script>
-  <script src="app.js"></script>
+  <script src="js/ui/grid-select.js"></script>
+  <script src="js/ui/loading.js"></script>
+  <script src="js/ui/install.js"></script>
+  <script src="js/main.js"></script>
   <script>
     // Service Worker 注册。
     // 失败时**不能在控制台完全静默** —— 否则"离线功能不生效"无从排查（见 REVIEW.md n4）。

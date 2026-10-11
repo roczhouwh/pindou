@@ -16,6 +16,22 @@
 //
 // 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
 // ============================================================
+
+// ---- 按钮装配（随函数群一起搬迁；**不要漏**）----
+// ⚠️ 这两行曾在搬迁中被漏掉：它们原本夹在「8. PNG 下载」段的函数之间，
+//    只搬"函数群"而把这段装配代码留在原地，就表现为"点下载没反应"
+//    （toBlob 从不回调、toast 也不出现）。见 test-export.js 的 4 档下载断言。
+downloadBtn.addEventListener('click', () => {
+  if (!state.gridData) return;
+  downloadPNG();
+});
+
+// 分享按钮
+shareBtn.addEventListener('click', () => {
+  if (!state.gridData) return;
+  sharePNG();
+});
+
 function sharePNG() {
   if (!state.gridData) return;
   const grid = state.gridData;

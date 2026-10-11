@@ -25,7 +25,10 @@
 //      + js/core/dom.js + js/core/state.js（核心层，**必须最先加载**）
 // v16：REFACTOR §7.1 步骤 5 拆文件 —— 新增 js/viewer/
 //      viewer.js + selection.js + panzoom.js（「2. 图片查看器」+「3. 矩形选框」）
-const CACHE_NAME = 'pindou-v16';
+// v17：REFACTOR §7.1 步骤 5 **拆文件完成** —— 新增 js/input/ 与 js/ui/ 其余模块
+//      （upload / camera / grid-select / loading / install）+ js/main.js；
+//      **app.js 已删除**（内容全部迁出，编排层改为 js/main.js）
+const CACHE_NAME = 'pindou-v17';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -36,9 +39,12 @@ const ASSET_PATHS = [
   './style.css',
   './color-palette.js',
   // ---- 按 index.html 的加载顺序列出各模块（**顺序即依赖，层次不能颠倒**）----
-  // 顺序错了会在运行时抛 TDZ 错误（如 `Cannot access '$' before initialization`）。
+  // 顺序错了会在运行时抛 TDZ / ReferenceError
+  // （如 `Cannot access '$' before initialization`、`closeCamera is not defined`）。
   './js/core/dom.js',
   './js/core/state.js',
+  './js/input/camera.js',
+  './js/input/upload.js',
   './js/pipeline/render.js',
   './js/pipeline/simplify.js',
   './js/pipeline/grid.js',
@@ -49,7 +55,10 @@ const ASSET_PATHS = [
   './js/output/stats.js',
   './js/output/export.js',
   './js/ui/a11y.js',
-  './app.js',
+  './js/ui/grid-select.js',
+  './js/ui/loading.js',
+  './js/ui/install.js',
+  './js/main.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
