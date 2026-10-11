@@ -32,7 +32,7 @@
 
 > **§五执行顺序无需变更**：第一批三项中「导出修复」已由自适应倍率完成，
 > 剩余「近似色合并」「行列标尺」优先级不变，且**都不受本轮改动阻塞**。
-> **新增回归测试**（`F:\claudeapp\demo\.pindou-devtools\run-all.js`，9 套件 / 76 断言）
+> **新增回归测试**（`F:\claudeapp\demo\.pindou-devtools\run-all.js`，11 套件 / 106 断言）
 > 可在开发这两项时随时验证"没改坏既有功能" —— 这正是 REFACTOR.md §五 所指出的
 > "无测试覆盖是最大风险"的补救。
 
@@ -562,7 +562,7 @@
 
 ```powershell
 cd F:\claudeapp\demo\.pindou-devtools
-node run-all.js      # 9 套件 / 76 断言，退出码 0 = 全绿
+node run-all.js      # 11 套件 / 106 断言，退出码 0 = 全绿
 ```
 
 它**加载真实的 `index.html` + `app.js`**（不复制逻辑），并用**真实像素缓冲**实现 canvas，

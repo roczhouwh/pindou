@@ -352,6 +352,8 @@ function showViewer() {
   viewerHint.hidden = false;
   viewerHint2.hidden = isTouchDevice;
   viewerHint3.hidden = !isTouchDevice;
+  // 键盘提示与触摸提示同源同判据：触摸设备没有物理键盘，显示它只是噪音（见 REVIEW.md M8）
+  viewerHint4.hidden = isTouchDevice;
   selectionBox.classList.add('visible');
 
   // iOS Safari: hidden→visible 切换后强制同步布局计算
@@ -622,6 +624,10 @@ document.addEventListener('pointerup', (e) => {
     state.dragHandle = null;
     viewerHint.hidden = true;
     viewerHint2.hidden = true;
+    // 键盘提示与其余提示同规则：用户已经开始操作，说明找到了交互方式。
+    // 注意键盘路径不经过本分支（不设 isDragging），
+    // 因此键盘用户仍能一直看到这条提示。
+    viewerHint4.hidden = true;
     generateGrid();
   }
   if (state.isPanning) {
