@@ -9,12 +9,21 @@
 - MARD 221 色标准色板（来源：peiseka.com）
 - PWA：manifest.json + Service Worker + 离线缓存
 
+## ⚠️ 正在进行中的结构改造 —— 动手前先读 [NEXT.md](NEXT.md)
+
+> **步骤 5（拆分文件）已完成** ✅：`app.js` 2136 行 → **19 个模块，`app.js` 已删除**。
+> **步骤 0（改原生 ESM）尚未开工** —— 下一步入口、硬约束、已实测结论**全部记在
+> [NEXT.md](NEXT.md)**，改代码前务必先读它。
+>
+> ⚠️ 本文件下面的「文件结构」等章节**仍在描述改造前的单文件形态**，尚未同步
+> （属改造收尾工作，见 NEXT.md §三）。**以仓库实际文件为准。**
+
 ## 文件结构
 
 ```
 index.html          — 页面结构（上传区 / 查看器 / 控制栏 / 预览 / 统计 / 拍照入口 / 加载动画 / 安装提示）
 style.css           — 样式，CSS 变量主题，响应式适配（640px/400px 断点），触摸设备适配
-app.js              — 核心逻辑（上传、选框、缩放平移、网格生成、预览、下载、触摸交互、分享、安装提示）
+app.js              — ⚠️ **已删除**（内容按 REFACTOR §4.2 迁至 js/ 下，见 NEXT.md §四）
 color-palette.js    — PERLER_PALETTE 221 色 + findNearestColor()
 manifest.json       — PWA 清单（名称、图标、standalone 模式）
 sw.js               — Service Worker（cache-first 离线缓存策略）
