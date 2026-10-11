@@ -41,7 +41,14 @@ cameraInput.addEventListener('change', (e) => {
 
 // 页面被隐藏 / 关闭时必须释放摄像头，否则相机指示灯常亮、
 // 且在 iOS 上会一直占用设备（见 REVIEW.md M3）
-window.addEventListener('pagehide', closeCamera);
+//
+// ⚠️ **必须包一层箭头函数，不能直接传 `closeCamera`**：
+//    直接传会在**模块顶层立即求值** `closeCamera` —— 这在裸 <script> 下只是加载顺序问题，
+//    但在 ESM 下 closeCamera 是 import 绑定，与 camera.js 构成**循环导入**，
+//    顶层求值会命中 TDZ 并抛 `ReferenceError: Cannot access 'closeCamera' before initialization`。
+//    包一层后引用推迟到事件触发时求值，循环导入即安全。
+//    （本项由 tmp-cycle-kind.js 实测定位：全项目**唯一**一处顶层跨模块求值。）
+window.addEventListener('pagehide', () => closeCamera());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') closeCamera();
 });
