@@ -1141,6 +1141,130 @@ function applySimplify() {
 }
 
 // ============================================================
+// 5.9 网格绘制 —— 预览与导出共用
+// ============================================================
+// 此前「填色 / 网格线 / 色号」三遍循环在 renderPreview 与 renderDownloadCanvas
+// 里**各写了一份**（REFACTOR §3.1 重复项 #2、#3）。抽到这里后两处共用同一实现，
+// 将来 PLAN 的行列标尺 / A4 打印也复用同一套绘制。
+
+/** 供网格与图例共用的字体栈。原本是 5 处字面量，改字体极易漏改（REFACTOR §3.1 重复项 #5） */
+const FONT_STACK = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+
+/**
+ * 依格子颜色的**相对亮度**选择色号文字颜色，保证对比度。
+ * 深色格配白字、浅色格配黑字（原在预览与导出各写一份，数学完全相同）。
+ *
+ * @param {{r:number,g:number,b:number}} cell 已映射的色板颜色
+ * @returns {string} `'#000000'` 或 `'#FFFFFF'`
+ */
+function pickTextColor(cell) {
+  // Rec.601 亮度权重
+  const lum = (cell.r * 0.299 + cell.g * 0.587 + cell.b * 0.114) / 255;
+  return lum > 0.5 ? '#000000' : '#FFFFFF';
+}
+
+/**
+ * 绘制整个网格：① 填色 ② 网格线 ③ 色号。**预览与导出共用**。
+ *
+ * ⚠️ **两个出口存在 4 处真实差异，必须由 `opts` 参数化保留**
+ * （REFACTOR §7.4 步 4、§3.2 #3；"顺手统一"会改变用户可见产出）：
+ *
+ * | 差异 | 预览 (renderPreview) | 导出 (renderDownloadCanvas) |
+ * |---|---|---|
+ * | 空格标记 | 画斜线 | **不画** |
+ * | 网格线色 | `rgba(0,0,0,0.15)` | `rgba(0,0,0,0.25)`（更清楚，供打印） |
+ * | 色号阈值 | 仅当 `minCell ≥ 10` 才画 | **总是画** |
+ * | 字号取整 | 保留小数 | `Math.round`（导出倍率下更稳） |
+ *
+ * 调用方须保证 `ctx` 的变换（如 `ctx.scale(dpr, dpr)`）**已经设置好** ——
+ * 本函数所有坐标都是 CSS 像素。
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Array<Array<{name:string,hex:string,r:number,g:number,b:number}|null>>} grid
+ * @param {object} opts
+ * @param {number} opts.x 网格左上角 x（CSS px）
+ * @param {number} opts.y 网格左上角 y（CSS px）
+ * @param {number} opts.cellW 单元格宽
+ * @param {number} opts.cellH 单元格高
+ * @param {string} opts.gridLineColor 网格线颜色
+ * @param {boolean} opts.hatchEmptyCells 是否给空格画斜线（预览 true / 导出 false）
+ * @param {number|null} opts.textMinCell 画色号所需的最小格边；`null` = 总是画
+ * @param {boolean} opts.roundFontSize 字号是否取整
+ */
+function drawGrid(ctx, grid, opts) {
+  const { x, y, cellW, cellH, gridLineColor, hatchEmptyCells, textMinCell, roundFontSize } = opts;
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const gridW = cols * cellW;
+  const gridH = rows * cellH;
+
+  // ---- 第一遍：填充所有格子（空格子留白）----
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cell = grid[row][col];
+      ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
+      ctx.fillRect(x + col * cellW, y + row * cellH, cellW, cellH);
+    }
+  }
+
+  // ---- 空格标记：仅预览画斜线（导出刻意不画，见上方差异表）----
+  if (hatchEmptyCells) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 0.5;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (grid[row][col]) continue;
+        const hx = x + col * cellW;
+        const hy = y + row * cellH;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + cellW, hy + cellH);
+        ctx.moveTo(hx + cellW, hy);
+        ctx.lineTo(hx, hy + cellH);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ---- 第二遍：统一绘制网格线（后画，避免同色格子盖住边框）----
+  ctx.strokeStyle = gridLineColor;
+  ctx.lineWidth = 0.5;
+  for (let row = 0; row <= rows; row++) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + row * cellH);
+    ctx.lineTo(x + gridW, y + row * cellH);
+    ctx.stroke();
+  }
+  for (let col = 0; col <= cols; col++) {
+    ctx.beginPath();
+    ctx.moveTo(x + col * cellW, y);
+    ctx.lineTo(x + col * cellW, y + gridH);
+    ctx.stroke();
+  }
+
+  // ---- 第三遍：绘制色号文字（空格子跳过）----
+  const minCell = Math.min(cellW, cellH);
+  // 阈值只对预览生效（textMinCell=null 时导出总是画色号）
+  if (textMinCell !== null && minCell < textMinCell) return;
+
+  const rawFontSize = minCell * 0.35;
+  const fontSize = Math.max(5, roundFontSize ? Math.round(rawFontSize) : rawFontSize);
+  ctx.font = `${fontSize}px ${FONT_STACK}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const c = grid[row][col];
+      if (!c) continue;
+      const cx = x + col * cellW + cellW / 2;
+      const cy = y + row * cellH + cellH / 2;
+      ctx.fillStyle = pickTextColor(c);
+      ctx.fillText(c.name, cx, cy);
+    }
+  }
+}
+
+// ============================================================
 // 6. 图纸预览
 // ============================================================
 
@@ -1175,7 +1299,6 @@ function renderPreview() {
   // 单元格尺寸（长方形，保持网格真实比例）
   const cellW = drawW / cols;
   const cellH = drawH / rows;
-  const minCell = Math.min(cellW, cellH);
 
   const dpr = window.devicePixelRatio || 1;
   const padding = 4;
@@ -1195,65 +1318,18 @@ function renderPreview() {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  // 第一遍：填充所有格子（空格子留白）
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const cell = grid[row][col];
-      ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
-      ctx.fillRect(padding + col * cellW, padding + row * cellH, cellW, cellH);
-    }
-  }
-  // 空格子画斜线标记
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      if (grid[row][col]) continue;
-      const x = padding + col * cellW;
-      const y = padding + row * cellH;
-      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + cellW, y + cellH);
-      ctx.moveTo(x + cellW, y);
-      ctx.lineTo(x, y + cellH);
-      ctx.stroke();
-    }
-  }
-  // 第二遍：统一绘制网格线（避免同色格子覆盖边框）
-  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-  ctx.lineWidth = 0.5;
-  for (let row = 0; row <= rows; row++) {
-    ctx.beginPath();
-    ctx.moveTo(padding, padding + row * cellH);
-    ctx.lineTo(padding + cols * cellW, padding + row * cellH);
-    ctx.stroke();
-  }
-  for (let col = 0; col <= cols; col++) {
-    ctx.beginPath();
-    ctx.moveTo(padding + col * cellW, padding);
-    ctx.lineTo(padding + col * cellW, padding + rows * cellH);
-    ctx.stroke();
-  }
-
-  // 第三遍：绘制色号文字（空格子跳过）
-  const minCellForText = 10;
-  if (minCell >= minCellForText) {
-    const fontSize = Math.max(5, minCell * 0.35);
-    ctx.font = `${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const c = grid[row][col];
-        if (!c) continue;
-        const cx = padding + col * cellW + cellW / 2;
-        const cy = padding + row * cellH + cellH / 2;
-        const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
-        ctx.fillStyle = lum > 0.5 ? '#000000' : '#FFFFFF';
-        ctx.fillText(c.name, cx, cy);
-      }
-    }
-  }
+  // 网格绘制（填色 + 网格线 + 色号）走共用实现。
+  // 预览的差异项：画空格斜线、网格线 0.15、色号需 minCell≥10、字号不取整
+  drawGrid(ctx, grid, {
+    x: padding,
+    y: padding,
+    cellW,
+    cellH,
+    gridLineColor: 'rgba(0,0,0,0.15)',
+    hatchEmptyCells: true,      // ⚠️ 导出刻意不画（§3.2 #3），详见 drawGrid 的差异表
+    textMinCell: 10,
+    roundFontSize: false,
+  });
 
   previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格${exportScaleNote()}`;
   // 极端比例提示：与预览信息同处，用户一眼能看到（见 REVIEW.md M9）
@@ -1467,7 +1543,7 @@ function renderDownloadCanvas() {
 
   // 图纸标题
   ctx.fillStyle = '#1A1A1A';
-  ctx.font = 'bold 20px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.font = `bold 20px ${FONT_STACK}`;
   ctx.textAlign = 'center';
   ctx.fillText(`拼豆图纸 ${cols}×${rows}`, canvasW / 2, padding + 28);
 
@@ -1475,51 +1551,23 @@ function renderDownloadCanvas() {
   const gridX = (canvasW - cols * cellW) / 2;
   const gridY = padding + titleHeight;
 
-  // 第一遍：填充所有格子（空格子留白）
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const cell = grid[row][col];
-      ctx.fillStyle = cell ? cell.hex : '#FFFFFF';
-      ctx.fillRect(gridX + col * cellW, gridY + row * cellH, cellW, cellH);
-    }
-  }
-  // 第二遍：统一绘制网格线
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = 0.5;
-  for (let row = 0; row <= rows; row++) {
-    ctx.beginPath();
-    ctx.moveTo(gridX, gridY + row * cellH);
-    ctx.lineTo(gridX + cols * cellW, gridY + row * cellH);
-    ctx.stroke();
-  }
-  for (let col = 0; col <= cols; col++) {
-    ctx.beginPath();
-    ctx.moveTo(gridX + col * cellW, gridY);
-    ctx.lineTo(gridX + col * cellW, gridY + rows * cellH);
-    ctx.stroke();
-  }
-
-  // 第三遍：绘制色号文字
-  const fontSize = Math.max(5, Math.round(Math.min(cellW, cellH) * 0.35));
-  ctx.font = `${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const c = grid[row][col];
-      if (!c) continue;
-      const cx = gridX + col * cellW + cellW / 2;
-      const cy = gridY + row * cellH + cellH / 2;
-      const lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
-      ctx.fillStyle = lum > 0.5 ? '#000000' : '#FFFFFF';
-      ctx.fillText(c.name, cx, cy);
-    }
-  }
+  // 网格绘制（填色 + 网格线 + 色号）走共用实现。
+  // 导出的差异项：**不画**空格斜线、网格线 0.25、色号总是画、字号取整
+  drawGrid(ctx, grid, {
+    x: gridX,
+    y: gridY,
+    cellW,
+    cellH,
+    gridLineColor: 'rgba(0,0,0,0.25)',
+    hatchEmptyCells: false,     // ⚠️ 预览画斜线、导出不画（§3.2 #3 定调：保持差异）
+    textMinCell: null,          // null = 不受阈值限制，总是画色号
+    roundFontSize: true,
+  });
 
   // 图例
   const legendStartY = legendTop;
   ctx.fillStyle = '#1A1A1A';
-  ctx.font = 'bold 16px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.font = `bold 16px ${FONT_STACK}`;
   ctx.textAlign = 'left';
   ctx.fillText('颜色对照表', padding, legendStartY - 8);
 
@@ -1542,7 +1590,7 @@ function renderDownloadCanvas() {
 
     // 文字
     ctx.fillStyle = '#1A1A1A';
-    ctx.font = '12px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.font = `12px ${FONT_STACK}`;
     ctx.textAlign = 'left';
     ctx.fillText(`${c.name} ×${c.count}`, lx + 28, ly + 15);
   }

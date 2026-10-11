@@ -13,7 +13,8 @@
 // v5：REFACTOR §7.1 步骤 1 拆猴补丁（generateGrid 入口化 + generateGridCore）
 // v6：REFACTOR §7.1 步骤 2 抽 computeImageRect（viewport 变换数学 3 份 → 1 份）
 // v7：REFACTOR §7.1 步骤 3b 拆 dragStart 语义（dragStartImage / dragStartClient / panStartPan）
-const CACHE_NAME = 'pindou-v7';
+// v8：REFACTOR §7.1 步骤 4 抽 drawGrid / pickTextColor / FONT_STACK（4 处出口差异参数化保留）
+const CACHE_NAME = 'pindou-v8';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 const ASSET_PATHS = [
