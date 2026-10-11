@@ -210,15 +210,20 @@
   </main>
 
   <script src="color-palette.js"></script>
-  <!-- ⚠️ 顺序即依赖：render.js 定义 drawGrid / drawRuler / pickTextColor / FONT_STACK，
-       后面 app.js 的 renderPreview 与 renderDownloadCanvas 会调用它们。
-       裸 script 之间共享全局词法环境（**顺序错了会落入 TDZ**，实测抛 ReferenceError）。
+  <!-- ⚠️ 顺序即依赖，**层次不能颠倒**。裸 script 之间共享全局词法环境，
+       顺序错了会抛 TDZ 错误（真实 Chrome 实测：`Cannot access '$' before initialization`）。
+       层次：core（DOM 引用 / state）→ pipeline（绘制·简化·生成）
+             → output（预览/统计/导出）→ ui（a11y）→ app.js（主逻辑与事件装配）
        此阶段刻意不用 type="module" —— 步骤 0 尚未执行。 -->
+  <script src="js/core/dom.js"></script>
+  <script src="js/core/state.js"></script>
   <script src="js/pipeline/render.js"></script>
   <script src="js/pipeline/simplify.js"></script>
   <script src="js/pipeline/grid.js"></script>
   <script src="js/output/preview.js"></script>
   <script src="js/output/stats.js"></script>
+  <script src="js/output/export.js"></script>
+  <script src="js/ui/a11y.js"></script>
   <script src="app.js"></script>
   <script>
     // Service Worker 注册。
