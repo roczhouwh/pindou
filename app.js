@@ -13,10 +13,12 @@ const uploadError = $('#uploadError');
 const viewerSection = $('#viewerSection');
 const viewerWrapper = $('#viewerWrapper');
 const viewerCanvas = $('#viewerCanvas');
-const selectionOverlay = $('#selectionOverlay');
+// 注：#selectionOverlay 是纯布局容器（无 JS 逻辑），不在此取引用 ——
+// 原先的 selectionOverlay 变量是死引用（全项目 0 处使用，见 REFACTOR.md §3.4）
 const selectionBox = $('#selectionBox');
 const viewerHint = $('#viewerHint');
 const viewerHint2 = $('#viewerHint2');
+const viewerHint4 = $('#viewerHint4');
 const controlsSection = $('#controlsSection');
 const downloadBtn = $('#downloadBtn');
 const previewSection = $('#previewSection');
@@ -42,47 +44,101 @@ const installBtn = $('#installBtn');
 const installClose = $('#installClose');
 const viewerHint3 = $('#viewerHint3');
 
-// 触摸设备检测
-const isTouchDevice = navigator.maxTouchPoints > 0;
+// 触摸设备检测。
+// ⚠️ 判据必须与 style.css 的 `@media (pointer: coarse)` **完全一致**（见 REVIEW.md M8）：
+// 此前 JS 用 `navigator.maxTouchPoints > 0`（存在任意触摸点），
+// CSS 用 `pointer: coarse`（**主**指针为粗指针）。二者不等价 ——
+// 触摸屏笔记本上 JS 判定"是触摸设备"（显示「双指缩放/平移」提示），
+// 而 CSS 判定"是桌面"（显示桌面拖拽上传区），界面提示与实际 UI 错配。
+// 统一走 CSS 同一判据，二者永远同向。
+const isTouchDevice = (() => {
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(pointer: coarse)').matches;
+  }
+  // 极老浏览器无 matchMedia：退回触摸点判据（有偏差但聊胜于无）
+  return navigator.maxTouchPoints > 0;
+})();
 
-// 导出画布像素上限（MP）。iOS Safari 约 16.78MP（4096²），
-// 超过时 toBlob 会静默回 null 导致「点了没反应」（见 REVIEW.md C2）
+// 导出画布像素上限。iOS Safari 内核（所有 WKWebView）约 16.78MP（4096²），
+// 且**单边也不得超过 4096**。超过时 toBlob 会静默回 null（见 REVIEW.md C2）。
 const MAX_EXPORT_MP = 16.78;
+const MAX_EXPORT_SIDE = 4096;
+// 期望的导出倍率（2x 高清）。设备允许时会用满，否则自动下调。
+const MAX_EXPORT_DPR = 2;
 
 // ----- 状态 -----
+// ⚠️ 所有字段必须在**此处**声明后再使用（REFACTOR.md §2.3 的教训：
+// 此前 dragSelection / rawGridData / rawColorCounts 是运行时动态挂上去的"影子字段"，
+// 读代码的人看不到它们，改 state 时必然漏改）。
 const state = {
   image: null,
   imageW: 0,
   imageH: 0,
+  /** 视图缩放倍率，夹取在 0.2 ~ 5 */
   zoom: 1,
   panX: 0,
   panY: 0,
   // 选框 (百分比, 0-1)
   selection: { x: 0.15, y: 0.15, w: 0.7, h: 0.7 },
-  // 网格尺寸
+  // 网格尺寸 (15~104)
   gridW: 29,
   gridH: 29,
   // 颜色简化 0-100, 0=关闭
   simplify: 0,
-  // 生成的网格数据
+  // 生成的网格数据（每个元素为 {name,hex,r,g,b} 或 null=空格）
   gridData: null,
   colorCounts: null,
+  /** 简化前的原始映射数据，供滑块回溯。**与 gridData 不共享引用**（见 REVIEW.md n7） */
+  rawGridData: null,
+  /** 与 rawGridData 对应的、按数量降序的颜色统计 */
+  rawColorCounts: null,
+  /** 极端宽高比导致的量化偏差提示（无则 null），由 generateGrid 写入、renderPreview 展示 */
+  aspectWarning: null,
   // 拖拽状态
   isDragging: false,
   isResizing: false,
   isPanning: false,
+  /**
+   * ⚠️ 承载**两种语义**（REFACTOR.md §2.2，改动前务必看清）：
+   * - 选框拖拽时写入**归一化图片坐标** `{ix, iy}`
+   * - 右键平移时写入 **client 像素坐标** `{x, y}`
+   */
   dragStart: { x: 0, y: 0 },
   dragHandle: null,
+  /** 拖拽开始时的选框快照（归一化） */
   dragSelection: null,
+  /** 右键平移开始时的 pan 偏移量 */
   panStart: { x: 0, y: 0 },
   // 触摸状态
   lastTouchDist: 0,
+  /** 上一帧的双指中心点（用于算缩放比与单帧增量） */
   lastTouchCenter: { x: 0, y: 0 },
+  /** 双指手势起点的中心点。平移位移必须相对它累计（见 REVIEW.md M2） */
+  touchStartCenter: { x: 0, y: 0 },
   isPinching: false,
 };
 
 // ----- 初始化 -----
 const viewerCtx = viewerCanvas.getContext('2d');
+
+/**
+ * 把 CSS 变量里的主题色同步到 <meta name="theme-color">。
+ * 主题色原本硬编码在 4 处（CSS / meta / manifest / icon.svg），改主题极易漏改
+ * （见 REVIEW.md n1）。meta 这一处可以在运行时从唯一真源（`--primary`）推导，
+ * 从此改主题色只需改 style.css 一处，页面主题色不会漂移。
+ * manifest / 图标是构建期资源，仍须手工同步（已在 style.css 注明）。
+ */
+(function syncThemeColorMeta() {
+  try {
+    const primary = getComputedStyle(document.documentElement)
+      .getPropertyValue('--primary').trim();
+    if (!primary) return;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && meta.content !== primary) meta.setAttribute('content', primary);
+  } catch (err) {
+    // 取不到就沿用 HTML 里写死的值，不影响功能
+  }
+})();
 
 // ============================================================
 // 1. 图片上传
@@ -162,9 +218,17 @@ function capturePhoto() {
   const video = document.getElementById('cameraVideo');
   if (!video || !video.videoWidth) return;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  // 复用同一个离屏 canvas，而不是每次拍照都 createElement。
+  // 原实现每次新建一个全分辨率的 canvas（1920×1080 ≈ 8MB 显存），
+  // 连续拍照会累积占用 —— 在 iOS 的 canvas 内存预算下尤其危险（见 REVIEW.md m8 / PLAN §3.2）。
+  if (!captureCanvas) captureCanvas = document.createElement('canvas');
+  const canvas = captureCanvas;
+
+  // 只在尺寸变化时重设：给 canvas 尺寸赋值会重置绘图状态
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0);
 
@@ -176,6 +240,9 @@ function capturePhoto() {
     }
   }, 'image/jpeg', 0.92);
 }
+
+/** 拍照用的复用画布（见 REVIEW.md m8） */
+let captureCanvas = null;
 
 function closeCamera() {
   if (cameraStream) {
@@ -242,7 +309,7 @@ function handleFile(file) {
       resetSimplify();
       state.gridW = 29;
       state.gridH = 29;
-      $$('.grid-btn').forEach((b) => b.classList.toggle('active', b.dataset.w === '29'));
+      markActiveGridBtn(29);
       showViewer();
     };
     img.src = ev.target.result;
@@ -468,6 +535,30 @@ document.addEventListener('pointerdown', (e) => {
   }
 });
 
+/**
+ * 合并同一帧内的视图重绘。
+ *
+ * 背景（见 REVIEW.md §六「性能耦合」）：pointermove 一个回调并联了
+ * isDragging / isResizing / isPanning 三套逻辑，每套都各调一次
+ * updateSelectionBox() + renderViewer()，**无节流、无 rAF 合并** ——
+ * 移动端每次指针移动可能触发 2 次全画布重绘。
+ *
+ * 这里把重绘收敛成"每帧至多一次"。安全性依据：
+ * state.selection / panX / panY 在监听器里**已同步更新**，
+ * 重绘只读 state，因此延迟到下一帧画的必然是最新状态，不会画丢中间态。
+ * 若已有排队的重绘则直接复用，不再重复排队。
+ */
+let viewerRedrawPending = false;
+function scheduleViewerRedraw() {
+  if (viewerRedrawPending) return;
+  viewerRedrawPending = true;
+  requestAnimationFrame(() => {
+    viewerRedrawPending = false;
+    renderViewer();
+    updateSelectionBox();
+  });
+}
+
 document.addEventListener('pointermove', (e) => {
   if (state.isDragging) {
     const coords = getImageCoords(e.clientX, e.clientY);
@@ -493,8 +584,7 @@ document.addEventListener('pointermove', (e) => {
         h: old.h,
       };
     }
-    updateSelectionBox();
-    renderViewer(); // 更新 canvas 上绘制的选框轮廓
+    scheduleViewerRedraw(); // 更新选框 DOM 与 canvas 上的选框轮廓（每帧合并）
   }
 
   if (state.isResizing) {
@@ -515,15 +605,13 @@ document.addEventListener('pointermove', (e) => {
     }
 
     state.selection = { x, y, w, h };
-    updateSelectionBox();
-    renderViewer(); // 更新 canvas 上绘制的选框轮廓
+    scheduleViewerRedraw(); // 更新选框 DOM 与 canvas 上的选框轮廓（每帧合并）
   }
 
   if (state.isPanning) {
     state.panX = state.panStart.x + (e.clientX - state.dragStart.x);
     state.panY = state.panStart.y + (e.clientY - state.dragStart.y);
-    renderViewer();
-    updateSelectionBox();
+    scheduleViewerRedraw();
   }
 });
 
@@ -574,6 +662,9 @@ viewerWrapper.addEventListener('touchstart', (e) => {
       x: (t1.clientX + t2.clientX) / 2,
       y: (t1.clientY + t2.clientY) / 2,
     };
+    // 记录手势**起点**：位移必须相对起点累计，不能逐帧取增量后叠加到起点
+    // （那样 panX 恒等于"起点 + 最后一帧的微小位移"，位移不累积，见 REVIEW.md M2）
+    state.touchStartCenter = { ...state.lastTouchCenter };
     state.isPinching = true;
     state.panStart = { x: state.panX, y: state.panY };
   }
@@ -592,12 +683,14 @@ viewerWrapper.addEventListener('touchmove', (e) => {
 
     // 缩放
     const scale = dist / state.lastTouchDist;
-    state.zoom = Math.max(0.2, Math.min(5, state.zoom * scale));
+    state.zoom = clamp(state.zoom * scale, 0.2, 5);
     state.lastTouchDist = dist;
 
-    // 双指平移
-    const dx = center.x - state.lastTouchCenter.x;
-    const dy = center.y - state.lastTouchCenter.y;
+    // 双指平移：用「起点 + 累计位移」，与鼠标平移（见 isPanning 分支）语义一致。
+    // 旧实现取单帧增量 dx 却叠到 panStart 上，导致位移不累积 ——
+    // 实测 10 帧每帧 +10px 只产生 10px 位移，且位移量与帧数无关（见 REVIEW.md M2）
+    const dx = center.x - state.touchStartCenter.x;
+    const dy = center.y - state.touchStartCenter.y;
     state.panX = state.panStart.x + dx;
     state.panY = state.panStart.y + dy;
     state.lastTouchCenter = center;
@@ -628,8 +721,7 @@ window.addEventListener('resize', () => {
 
 $$('.grid-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    $$('.grid-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
+    markActiveGridBtn(btn.dataset.w);
     state.gridW = parseInt(btn.dataset.w);
     state.gridH = parseInt(btn.dataset.h);
     customW.value = '';
@@ -644,11 +736,26 @@ applyCustom.addEventListener('click', () => {
   const hasW = !isNaN(w) && w >= 15 && w <= 104;
   const hasH = !isNaN(h) && h >= 15 && h <= 104;
 
-  if (!hasW && !hasH) return;
+  if (!hasW && !hasH) {
+    // 此前静默返回，用户点「应用」毫无反应、不知为何（见 REVIEW.md m10）
+    const bad = [];
+    if (customW.value !== '' && !hasW) bad.push(`宽 ${customW.value}`);
+    if (customH.value !== '' && !hasH) bad.push(`高 ${customH.value}`);
+    showToast(
+      bad.length
+        ? `${bad.join('、')} 超出范围，请填 15 ~ 104 之间的整数`
+        : '请至少填写宽或高（15 ~ 104 之间的整数）'
+    );
+    return;
+  }
   // 固定网格尺寸：选框内容按比例 fit 进网格，不再调整网格尺寸
   state.gridW = hasW ? w : state.gridW;
   state.gridH = hasH ? h : state.gridH;
-  $$('.grid-btn').forEach((b) => b.classList.remove('active'));
+  // 自定义尺寸与预设按钮互斥：清掉 active 与 aria-pressed（两者必须同步）
+  $$('.grid-btn').forEach((b) => {
+    b.classList.remove('active');
+    b.setAttribute('aria-pressed', 'false');
+  });
   generateGrid();
 });
 
@@ -656,11 +763,15 @@ applyCustom.addEventListener('click', () => {
 simplifySlider.addEventListener('input', () => {
   const val = parseInt(simplifySlider.value);
   state.simplify = val;
-  simplifyValue.textContent = val === 0 ? '关闭' : `${val}%`;
+  const label = val === 0 ? '关闭' : `${val}%`;
+  simplifyValue.textContent = label;
+  // 滑块需要可访问的值文本：读屏只报数字，不知道 0 表示"关闭"（见 REVIEW.md m6）
+  simplifySlider.setAttribute('aria-valuetext', label);
   if (state.rawGridData) {
     applySimplify();
     renderPreview();
     renderStats();
+    announce(`颜色简化 ${label}，当前 ${state.colorCounts ? state.colorCounts.length : 0} 种颜色`);
   }
 });
 
@@ -673,6 +784,7 @@ function resetSimplify() {
   state.simplify = 0;
   simplifySlider.value = 0;
   simplifyValue.textContent = '关闭';
+  simplifySlider.setAttribute('aria-valuetext', '关闭');
 }
 
 // ============================================================
@@ -685,9 +797,13 @@ function generateGrid() {
   const gw = state.gridW;
   const gh = state.gridH;
 
-  // 创建离屏 canvas 用于采样
+  // 创建离屏 canvas 用于采样。
   // iOS Safari 对大 canvas 有硬限制（~4096px 或总像素上限），
-  // 大图先降采样到最长边 2048 再采样，颜色精度不受影响
+  // 大图先降采样到最长边 2048 再采样。
+  // ⚠️ 精度说明（更正原注释）：降采样**会**影响颜色 —— drawImage 会做平滑平均，
+  // 对细纹理/高频细节是真实的低通损失，只是对"每格平均色"这一用途影响很小。
+  // 原注释称"颜色精度不受影响"夸大其保证（见 REVIEW.md m11）。
+  // 用 imageSmoothingQuality='high' 减轻该损失（见 REVIEW.md n9）。
   const MAX_OFFSCREEN = 2048;
   let sampleW = state.imageW;
   let sampleH = state.imageH;
@@ -700,6 +816,10 @@ function generateGrid() {
   const offCtx = offscreenCanvas.getContext('2d');
   offscreenCanvas.width = sampleW;
   offscreenCanvas.height = sampleH;
+  // 降采样质量默认是 'low'，会加重细纹理的插值损失（见 REVIEW.md n9）。
+  // 必须在赋值 width/height **之后**设置：给 canvas 尺寸赋值会重置绘图状态。
+  offCtx.imageSmoothingEnabled = true;
+  offCtx.imageSmoothingQuality = 'high';
   offCtx.drawImage(state.image, 0, 0, sampleW, sampleH);
 
   // 选框像素坐标
@@ -719,19 +839,29 @@ function generateGrid() {
   let contentW, contentH, offsetCol, offsetRow;
   if (selAspect >= gridAspect) {
     // 内容填满宽度，上下留空
+    // 取整分工（见 REVIEW.md m14）：格数取最接近值（round），留白取整数格（floor）
     contentW = gw;
-    contentH = Math.round(gw / selAspect);
-    contentH = Math.max(1, Math.min(gh, contentH));
+    contentH = Math.max(1, Math.min(gh, Math.round(gw / selAspect)));
     offsetCol = 0;
     offsetRow = Math.floor((gh - contentH) / 2);
   } else {
     // 内容填满高度，左右留空
     contentH = gh;
-    contentW = Math.round(gh * selAspect);
-    contentW = Math.max(1, Math.min(gw, contentW));
+    contentW = Math.max(1, Math.min(gw, Math.round(gh * selAspect)));
     offsetCol = Math.floor((gw - contentW) / 2);
     offsetRow = 0;
   }
+
+  // ---- 极端宽高比的量化偏差提示（见 REVIEW.md M9）----
+  // 内容只占很少格数时，Math.round 的 ±0.5 格就是很大的相对偏差
+  // （实测 29×29 配 20:1 选框 → 内容 29×1，偏差 +45%）。
+  // 这不是逻辑错误而是**量化极限**（偏差 ≈ 0.5 ÷ content 短边格数），
+  // 故不强行修正，而是如实提示用户。
+  const contentShort = Math.min(contentW, contentH);
+  const quantError = 0.5 / contentShort;
+  state.aspectWarning = quantError > 0.08
+    ? `选框比例较极端（内容仅 ${contentW}×${contentH} 格），图纸约有 ${Math.round(quantError * 100)}% 的量化拉伸。建议把选框选得更方正些。`
+    : null;
 
   // 每个内容格对应选框的像素尺寸（contentW/gw = contentH/gh = selAspect，格子为正方形）
   const cellSampW = selW / contentW;
@@ -802,7 +932,13 @@ function generateGrid() {
   }
 
   // 保存原始映射数据（颜色简化用）
-  state.rawGridData = grid.map(r => r.map(c => c ? { ...c } : null));
+  // 深拷贝两层：行数组与**格子对象**都要独立。
+  // 必要性（见 REVIEW.md n7 / PLAN §3.4）：
+  //  ① `findNearestColor` 返回的是 PERLER_PALETTE 里的**对象引用**，
+  //     若直接存进 gridData，将来做单元格编辑就会就地改坏**全局色板**；
+  //  ② gridData 与 rawGridData 若共享行数组，"滑块回 0 恢复原始数据"
+  //     会恢复出被编辑过的内容且不可逆。
+  state.rawGridData = cloneGrid(grid);
   // 与 rebuildColorCounts 一致地按数量降序：否则 simplify=0 与 simplify>0
   // 两条路径给出的统计表顺序不同，拖动滑块会看到表格重排（见 REVIEW.md M1）
   state.rawColorCounts = Array.from(colorMap.values())
@@ -813,18 +949,30 @@ function generateGrid() {
   if (state.simplify > 0) {
     applySimplify();
   } else {
-    state.gridData = state.rawGridData;
+    // 必须是独立副本，不能 `state.gridData = state.rawGridData`（见上方 ①②）
+    state.gridData = cloneGrid(state.rawGridData);
     state.colorCounts = state.rawColorCounts;
   }
 
   renderPreview();
   renderStats();
   downloadBtn.disabled = false;
+  // 播报生成结果：读屏用户此前对"图纸已生成"完全无感（见 REVIEW.md M5）
+  announce(`图纸已生成：${gw}×${gh} 网格，${state.colorCounts ? state.colorCounts.length : 0} 种颜色`);
 }
 
 // ============================================================
 // 5.5 颜色简化 — 合并映射后的相近颜色
 // ============================================================
+
+/**
+ * 深拷贝一份网格：行数组与格子对象都不共享。
+ * 关键点是格子对象 —— `findNearestColor()` 返回的是 PERLER_PALETTE 里的
+ * 对象引用，浅拷贝会让格子仍然指向全局色板（见 REVIEW.md n7）。
+ */
+function cloneGrid(grid) {
+  return grid.map((row) => row.map((cell) => (cell ? { ...cell } : null)));
+}
 
 /** 从 gridData 重建 colorCounts */
 function rebuildColorCounts(grid) {
@@ -847,7 +995,8 @@ function applySimplify() {
   if (!raw) return;
 
   if (threshold <= 0) {
-    state.gridData = state.rawGridData;
+    // 独立副本，不能共享 rawGridData 的行数组（见 REVIEW.md n7）
+    state.gridData = cloneGrid(state.rawGridData);
     state.colorCounts = state.rawColorCounts;
     return;
   }
@@ -855,13 +1004,19 @@ function applySimplify() {
   // 将简化值 0-100 映射到平方距离阈值
   // 100 → 5000（≈ RGB 每通道差 ~40，相当激进）
   const maxDistSq = (threshold / 100) * 5000;
-  if (maxDistSq <= 0) return;
+  if (maxDistSq <= 0) {
+    // 不可达（threshold<=0 已在上方返回），但早返回会让 gridData 停留在旧值、
+    // 与新的 simplify 不一致 —— 补齐而不是留一个静默退出（见 REVIEW.md m13）
+    state.gridData = cloneGrid(state.rawGridData);
+    state.colorCounts = state.rawColorCounts;
+    return;
+  }
 
   const rows = raw.length;
   const cols = raw[0].length;
 
-  // 深拷贝一份原始网格
-  const grid = raw.map(r => r.map(c => c ? { ...c } : null));
+  // 深拷贝一份原始网格（格子对象也要独立，见 cloneGrid 注释）
+  const grid = cloneGrid(raw);
 
   // 统计颜色频率（从原始数据）
   const freq = new Map();
@@ -919,7 +1074,9 @@ function applySimplify() {
       const cell = grid[r][c];
       if (cell && mergeMap.has(cell.hex)) {
         const tgt = paletteMap.get(mergeMap.get(cell.hex));
-        if (tgt) grid[r][c] = tgt;
+        // 拷贝而非直接引用色板对象：直接赋值会让 gridData 里混入全局色板引用，
+        // 将来单元格编辑会就地改坏色板（见 REVIEW.md n7）
+        if (tgt) grid[r][c] = { ...tgt };
       }
     }
   }
@@ -1043,7 +1200,12 @@ function renderPreview() {
     }
   }
 
-  previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格`;
+  previewInfo.textContent = `${cols}×${rows} 网格 · ${Math.round(cellW)}×${Math.round(cellH)}px/格${exportScaleNote()}`;
+  // 极端比例提示：与预览信息同处，用户一眼能看到（见 REVIEW.md M9）
+  previewInfo.classList.toggle('preview-warning', !!state.aspectWarning);
+  if (state.aspectWarning) {
+    previewInfo.textContent += ` ⚠️ ${state.aspectWarning}`;
+  }
 }
 
 // ============================================================
@@ -1092,14 +1254,14 @@ shareBtn.addEventListener('click', () => {
 
 function sharePNG() {
   if (!state.gridData) return;
-  // 先渲染下载画布，再分享
-  renderDownloadCanvas();
   const grid = state.gridData;
   const rows = grid.length;
   const cols = grid[0].length;
 
-  // 预检：超限时 toBlob 会静默回 null，这里先给出提示（见 REVIEW.md C2）
+  // 预检放在渲染之前；与 downloadPNG 走同一套尺寸判定（见 REVIEW.md C2）
   if (!checkExportSize(cols, rows)) return;
+  // 再渲染下载画布，供分享使用
+  renderDownloadCanvas();
 
   downloadCanvas.toBlob((blob) => {
     if (!blob) {
@@ -1129,12 +1291,16 @@ function sharePNG() {
  * 计算下载画布的实际像素尺寸。
  * 抽出来供 renderDownloadCanvas 与 checkExportSize 共用，
  * 避免预检用的尺寸与真实渲染尺寸各自演算而漂移（见 REVIEW.md C2）。
+ *
+ * 倍率自适应：先按期望倍率算，若超出设备上限（面积 or 单边）则逐级下调。
+ * 这是 C2 的根治手段 —— 此前 78/104 只能"拦截 + 提示"，
+ * 现在改为降到设备能承受的倍率后**照样导出**，用户不再被拒绝服务。
  */
 function computeDownloadSize() {
   const rows = state.gridData.length;
   const cols = state.gridData[0].length;
 
-  // 按网格宽高比计算单元格尺寸，避免图纸被拉伸
+  // 按网格宽高比计算单元格尺寸，避免图纸被拉伸（1x 基准）
   const gridAspect = cols / rows;
   const baseCell = 28; // 较短边 28px
   let cellW, cellH;
@@ -1146,7 +1312,6 @@ function computeDownloadSize() {
     cellH = Math.round(baseCell / gridAspect);
   }
 
-  const dpr = 2; // 2x 高清
   const padding = 16;
   const titleHeight = 40;
   const legendItemHeight = 28;
@@ -1160,26 +1325,71 @@ function computeDownloadSize() {
   const canvasW = Math.max(cols * cellW + padding * 2, legendW);
   const canvasH = legendTop + legendPadding + legendRows * legendItemHeight + padding;
 
+  const dpr = pickExportDpr(canvasW, canvasH);
+
   return { canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight, legendItemHeight, legendPadding, legendTop, legendRows, legendW, legendCols, rows, cols };
 }
 
 /**
+ * 挑选本设备能承受的最大导出倍率。
+ * 同时受两个约束（见 PLAN §3.2）：**总像素 ≤ 16.78MP** 与 **单边 ≤ 4096**。
+ * 取 1/2 的整数档（2 → 1），保证 PNG 尺寸是整数、不会出现半像素模糊。
+ * 返回 1 是下限：1x 下最大网格（104×104）约 9.6MP，仍在预算内，
+ * 因此**不存在"只能拒绝导出"的档位**。
+ */
+function pickExportDpr(canvasW, canvasH) {
+  for (let dpr = MAX_EXPORT_DPR; dpr > 1; dpr /= 2) {
+    const w = canvasW * dpr;
+    const h = canvasH * dpr;
+    const mp = (w * h) / 1e6;
+    if (mp <= MAX_EXPORT_MP && w <= MAX_EXPORT_SIDE && h <= MAX_EXPORT_SIDE) {
+      return dpr;
+    }
+  }
+  return 1;
+}
+
+/**
  * 导出前的尺寸预检。
- * iOS Safari 画布上限约 16.78MP（4096²），超过时 toBlob 静默回 null，
- * 用户点了「下载」毫无反应。这里提前拦截并给出可操作的提示。
+ *
+ * **行为变更（C2 根治）**：此前这里在超限时**拦截导出**并提示"改用更小尺寸"，
+ * 用户被拒绝服务。现在倍率由 `pickExportDpr()` 自动下调到设备能承受的档位，
+ * 所以此处**只在极端情况下兜底**：若连 1x 都超限（当前网格上限 104×104 下不可达，
+ * 属纯防御），才拒绝并给出可操作提示。
+ *
  * 返回 true 表示可以继续导出。
  */
 function checkExportSize(cols, rows) {
   const { canvasW, canvasH, dpr } = computeDownloadSize();
-  const mp = (canvasW * dpr * canvasH * dpr) / 1e6;
-  if (mp > MAX_EXPORT_MP) {
+  const w = canvasW * dpr;
+  const h = canvasH * dpr;
+  const mp = (w * h) / 1e6;
+
+  if (mp > MAX_EXPORT_MP || w > MAX_EXPORT_SIDE || h > MAX_EXPORT_SIDE) {
     showToast(
-      `${cols}×${rows} 的图纸约 ${mp.toFixed(1)}MP，超出本设备浏览器上限（约 ${MAX_EXPORT_MP}MP），` +
-      `无法导出。请改用 52×52 或更小的尺寸。`
+      `${cols}×${rows} 的图纸需要 ${Math.round(w)}×${Math.round(h)} 像素（约 ${mp.toFixed(1)}MP），` +
+      `超出本设备浏览器上限（约 ${MAX_EXPORT_MP}MP / 单边 ${MAX_EXPORT_SIDE}px），无法导出。` +
+      `请改用更小的网格尺寸。`
     );
     return false;
   }
   return true;
+}
+
+/**
+ * 导出倍率的用户可读描述。
+ * 降过倍率时**必须在界面上如实说明**（而不是静默降清晰度），
+ * 所以渲染在常驻的 #previewInfo 里，不占用 toast。
+ */
+function exportScaleNote() {
+  if (!state.gridData) return '';
+  const { canvasW, canvasH, dpr } = computeDownloadSize();
+  const mp = (canvasW * dpr * canvasH * dpr) / 1e6;
+  const px = `${Math.round(canvasW * dpr)}×${Math.round(canvasH * dpr)}`;
+  if (dpr < MAX_EXPORT_DPR) {
+    return ` · 导出 ${dpr}x（${px}，约 ${mp.toFixed(1)}MP，已为保证导出成功降档）`;
+  }
+  return ` · 导出 ${dpr}x（${px}）`;
 }
 
 /** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
@@ -1285,12 +1495,12 @@ function renderDownloadCanvas() {
 
 function downloadPNG() {
   if (!state.gridData) return;
-  renderDownloadCanvas();
   const cols = state.gridData[0].length;
   const rows = state.gridData.length;
 
-  // 预检：超限时 toBlob 会静默回 null（见 REVIEW.md C2）
+  // 预检放在渲染之前：超限时不必先分配一块用不了的画布（见 REVIEW.md C2）
   if (!checkExportSize(cols, rows)) return;
+  renderDownloadCanvas();
 
   // iOS Safari 不支持 blob URL 的 <a download>，改为新窗口打开让用户长按保存。
   // 必须在用户手势的调用栈内同步开窗 —— toBlob 回调是异步的，
@@ -1307,7 +1517,12 @@ function downloadPNG() {
   downloadCanvas.toBlob((blob) => {
     if (!blob) {
       if (iosWindow) iosWindow.close();
-      showToast('导出画布过大，无法生成 PNG，请改用较小的网格尺寸');
+      // 走到这里说明即使降档后设备仍拒绝出图（内存紧张等）。
+      // 提示要给出**下一步动作**，不能只说"失败了"（见 REVIEW.md C2）
+      showToast(
+        '设备未能生成 PNG（可能是内存不足）。请关闭其它标签页后重试，' +
+        '或改用更小的网格尺寸。'
+      );
       return;
     }
     const url = URL.createObjectURL(blob);
@@ -1332,6 +1547,29 @@ function downloadPNG() {
 // 工具函数
 // ============================================================
 
+/**
+ * 向 #liveStatus 写入一条播报。读屏会念出来，视觉上不可见。
+ * 用于生成完成、尺寸变化等「用户看不见但需要知道」的状态（见 REVIEW.md M5）。
+ */
+let liveTimer = null;
+function announce(msg) {
+  const el = document.getElementById('liveStatus');
+  if (!el) return;
+  // 先清空再写入：相同的字符串连续写入不会触发 aria-live 播报
+  el.textContent = '';
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { el.textContent = msg; }, 60);
+}
+
+/** 网格尺寸按钮的 aria-pressed 与 active class 必须同步（见 CLAUDE.md 双保险思路） */
+function markActiveGridBtn(w) {
+  $$('.grid-btn').forEach((b) => {
+    const on = b.dataset.w === String(w);
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
 // 重置选框（恢复默认位置和大小）
 $('#resetSelectionBtn').addEventListener('click', () => {
   state.selection = { x: 0.15, y: 0.15, w: 0.7, h: 0.7 };
@@ -1342,6 +1580,51 @@ $('#resetSelectionBtn').addEventListener('click', () => {
   resizeViewerCanvas();
   renderViewer();
   updateSelectionBox();
+  generateGrid();
+});
+
+// ============================================================
+// 键盘操作选框（见 REVIEW.md C3）
+// 此前选框的全部操作只由指针事件驱动，键盘用户**无法完成"框选区域"**
+// 这一核心用例（WCAG 2.1.1 A 级失败）。这里补一条键盘通路：
+//   方向键        移动选框
+//   Shift+方向键  调整选框大小
+// viewer 区域可聚焦（tabindex 由 HTML 提供），聚焦后才响应，避免抢占页面滚动。
+// ============================================================
+const KEYBOARD_STEP = 0.02;      // 每次按键移动/缩放的归一化步长
+const KEYBOARD_MIN_SIZE = 0.05;  // 选框最小尺寸，避免缩到 0 后无法再操作
+
+viewerWrapper.addEventListener('keydown', (e) => {
+  if (!state.image) return;
+
+  const deltas = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  };
+  const d = deltas[e.key];
+  if (!d) return;
+
+  e.preventDefault();
+  const sel = state.selection;
+  const step = KEYBOARD_STEP;
+
+  if (e.shiftKey) {
+    // 调整大小：以选框右边/下边为基准（保持左上角不动，行为可预期）
+    let w = sel.w + d[0] * step;
+    let h = sel.h + d[1] * step;
+    w = clamp(w, KEYBOARD_MIN_SIZE, 1 - sel.x);
+    h = clamp(h, KEYBOARD_MIN_SIZE, 1 - sel.y);
+    state.selection = { x: sel.x, y: sel.y, w, h };
+    announce(`选框大小 ${Math.round(w * 100)}% × ${Math.round(h * 100)}%`);
+  } else {
+    // 移动选框：夹取到图片范围内
+    const x = clamp(sel.x + d[0] * step, 0, 1 - sel.w);
+    const y = clamp(sel.y + d[1] * step, 0, 1 - sel.h);
+    state.selection = { x, y, w: sel.w, h: sel.h };
+    announce(`选框位置 ${Math.round(x * 100)}%, ${Math.round(y * 100)}%`);
+  }
+
+  updateSelectionBox();
+  renderViewer();
   generateGrid();
 });
 
@@ -1356,7 +1639,7 @@ $('#resetBtn').addEventListener('click', () => {
   resetSimplify();
   state.gridW = 29;
   state.gridH = 29;
-  $$('.grid-btn').forEach((b) => b.classList.toggle('active', b.dataset.w === '29'));
+  markActiveGridBtn(29);
   // 清空画布，避免残留旧图片
   viewerCtx.clearRect(0, 0, viewerCanvas.width, viewerCanvas.height);
   selectionBox.classList.remove('visible');

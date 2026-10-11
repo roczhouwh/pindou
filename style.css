@@ -15,6 +15,12 @@
   --text: #1A1A1A;
   --text-secondary: #666666;
   --text-muted: #999999;
+  /* ⚠️ 主题色是**跨文件常量**，改它必须同步改以下全部位置（见 REVIEW.md n1）：
+       ① 本处 --primary / --selection
+       ② index.html 的 <meta name="theme-color">  ← 已由 app.js 运行时自动同步，通常不必手改
+       ③ manifest.json 的 "theme_color"
+       ④ icon.svg 的渐变 stop-color
+       ⑤ 若改了色，需重新运行图标生成（icon-192/512 及其 -maskable 版本） */
   --primary: #6366F1;
   --primary-hover: #4F46E5;
   --primary-light: #EEF2FF;
@@ -33,6 +39,32 @@ body {
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+}
+
+/* --- 可访问性工具类 --- */
+
+/* 视觉隐藏但**保留给读屏**。用于 aria-live 播报区、禁用原因等
+   （不能用 display:none / visibility:hidden —— 那样读屏也拿不到）。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 统一的键盘焦点样式。除 .custom-input 外此前所有可聚焦元素都无自定义
+   focus 样式，键盘用户看不出焦点在哪（见 REVIEW.md n3）。
+   用 :focus-visible 只对键盘聚焦生效，鼠标点击不出现外框。 */
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* --- Header --- */
@@ -608,6 +640,13 @@ body {
   text-align: center;
 }
 
+/* 极端宽高比的量化偏差警告（见 REVIEW.md M9）——
+   不能只靠颜色区分（色盲用户看不出），故同时加粗并带 ⚠️ 符号 */
+.preview-info.preview-warning {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 /* --- Stats --- */
 .stats-table-wrapper {
   overflow-x: auto;
@@ -749,7 +788,6 @@ body {
   .handle.sw { bottom: -11px; left: -11px; }
   .handle.s  { bottom: -11px; margin-left: -11px; }
   .handle.se { bottom: -11px; right: -11px; }
-  .btn-camera { display: inline-flex; }
   #viewerHint2 { display: none; }
   #viewerHint3 { display: block; }
 }

@@ -10,7 +10,7 @@
 
 // ⚠️ 任何对 index.html / app.js / color-palette.js / style.css 的改动都必须递增此版本号，
 // 否则 cache-first 会让老用户一直拿到旧文件、看不到更新（见 REVIEW.md 相关说明）
-const CACHE_NAME = 'pindou-v3';
+const CACHE_NAME = 'pindou-v4';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 const ASSET_PATHS = [
@@ -22,6 +22,8 @@ const ASSET_PATHS = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './icon-192-maskable.png',
+  './icon-512-maskable.png',
 ];
 
 // 标识「这就是拼豆页面」的稳定字符串，用于导航缓存做校验
@@ -42,9 +44,28 @@ const SCOPE_URL = scopeURL.href;
 // install: 预缓存拼豆核心资源
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll([...ASSETS]))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // 逐个 add + allSettled，而不是 cache.addAll：
+      // addAll 是**原子操作**，8 个资源中任一失败（网络抖动、图标 404、
+      // '/' 返回重定向导致 response.ok 为 false）就会整体 reject →
+      // install 失败 → SW 永不激活 → **离线能力完全不可用**（见 REVIEW.md M7）。
+      // 逐项缓存后，失败项只是缺一个离线副本，不影响其余资源与 SW 激活。
+      const results = await Promise.allSettled(
+        [...ASSETS].map((url) => cache.add(url))
+      );
+
+      const failed = results
+        .map((r, i) => (r.status === 'rejected' ? [...ASSETS][i] : null))
+        .filter(Boolean);
+
+      if (failed.length) {
+        // 如实播报，避免"离线时某个资源神秘 404"无从排查（见 n4 的同类问题）
+        console.warn(
+          `[拼豆 SW] ${failed.length}/${ASSETS.size} 个资源预缓存失败，离线时这些资源不可用：`,
+          failed
+        );
+      }
+    })
   );
   // 跳过等待，立即激活
   self.skipWaiting();

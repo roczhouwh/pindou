@@ -29,7 +29,7 @@
       <!-- 桌面端：拖拽上传区 -->
       <div class="upload-zone" id="uploadZone">
         <div class="upload-icon">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
@@ -41,7 +41,7 @@
       <!-- 手机端：双按钮 -->
       <div class="upload-buttons" id="uploadButtons">
         <button class="upload-btn" id="galleryBtn">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
             <polyline points="21 15 16 10 5 21"/>
@@ -49,7 +49,7 @@
           <span>相册</span>
         </button>
         <button class="upload-btn" id="cameraBtn">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
@@ -65,8 +65,11 @@
         <button class="btn btn-sm" id="resetBtn">🔄 重新上传</button>
         <button class="btn btn-sm" id="resetSelectionBtn">↩ 重置选框</button>
       </div>
-      <div class="viewer-wrapper" id="viewerWrapper">
-        <canvas id="viewerCanvas"></canvas>
+      <!-- tabindex 让键盘用户能聚焦到选框区域并用方向键操作（见 REVIEW.md C3） -->
+      <div class="viewer-wrapper" id="viewerWrapper" tabindex="0"
+           aria-label="框选区域：用方向键移动选框，Shift 加方向键调整大小">
+        <!-- 画布需要可访问名称：读屏用户听到的是"框选区域"，而不是无名的 canvas（见 REVIEW.md M4） -->
+        <canvas id="viewerCanvas" role="img" aria-label="图片查看器"></canvas>
         <!-- 矩形选框覆盖层 -->
         <div class="selection-overlay" id="selectionOverlay">
           <div class="selection-box" id="selectionBox">    <!-- 用 class 控制显隐，不用 hidden 属性（iOS Safari 兼容） -->
@@ -85,41 +88,50 @@
       <p class="viewer-hint" id="viewerHint">✨ 在图片上拖拽框选目标区域</p>
       <p class="viewer-hint" id="viewerHint2">🖱 滚轮缩放 · 右键拖拽平移</p>
       <p class="viewer-hint" id="viewerHint3" hidden>📱 双指缩放/平移</p>
+      <!-- 键盘操作提示：仅对键盘用户可见（C3 的键盘通路，见 REVIEW.md C3） -->
+      <p class="viewer-hint" id="viewerHint4">⌨ 方向键移动选框 · Shift+方向键调整大小</p>
     </section>
 
     <!-- ====== 控制栏 ====== -->
     <section class="controls-section" id="controlsSection" hidden>
       <div class="controls">
         <div class="control-group">
-          <label class="control-label">网格尺寸</label>
-          <div class="grid-sizes">
-            <button class="grid-btn active" data-w="29" data-h="29">29×29</button>
-            <button class="grid-btn" data-w="52" data-h="52">52×52</button>
-            <button class="grid-btn" data-w="78" data-h="78">78×78</button>
-            <button class="grid-btn" data-w="104" data-h="104">104×104</button>
+          <span class="control-label" id="gridSizeLabel">网格尺寸</span>
+          <div class="grid-sizes" role="group" aria-labelledby="gridSizeLabel">
+            <button class="grid-btn active" data-w="29" data-h="29" aria-pressed="true">29×29</button>
+            <button class="grid-btn" data-w="52" data-h="52" aria-pressed="false">52×52</button>
+            <button class="grid-btn" data-w="78" data-h="78" aria-pressed="false">78×78</button>
+            <button class="grid-btn" data-w="104" data-h="104" aria-pressed="false">104×104</button>
           </div>
           <p class="aspect-hint">选框内容按比例自动居中放入豆板</p>
         </div>
         <div class="control-group custom-size">
-          <label class="control-label">自定义</label>
-          <div class="custom-inputs">
-            <input type="number" id="customW" min="15" max="104" placeholder="宽" class="custom-input">
-            <span class="custom-x">×</span>
-            <input type="number" id="customH" min="15" max="104" placeholder="高" class="custom-input">
+          <span class="control-label" id="customSizeLabel">自定义</span>
+          <div class="custom-inputs" role="group" aria-labelledby="customSizeLabel">
+            <!-- placeholder 不是可访问名称（输入后即消失），必须补 aria-label（见 REVIEW.md m5） -->
+            <input type="number" id="customW" min="15" max="104" placeholder="宽"
+                   aria-label="自定义网格宽度（15 到 104）" class="custom-input">
+            <span class="custom-x" aria-hidden="true">×</span>
+            <input type="number" id="customH" min="15" max="104" placeholder="高"
+                   aria-label="自定义网格高度（15 到 104）" class="custom-input">
             <button id="applyCustom" class="btn btn-sm">应用</button>
           </div>
         </div>
         <div class="control-group simplify-group">
-          <label class="control-label">颜色简化</label>
+          <label class="control-label" for="simplifySlider">颜色简化</label>
           <div class="simplify-control">
-            <input type="range" id="simplifySlider" min="0" max="100" value="0">
+            <input type="range" id="simplifySlider" min="0" max="100" value="0"
+                   aria-describedby="simplifyValue" aria-valuetext="关闭">
             <span class="simplify-value" id="simplifyValue">关闭</span>
           </div>
         </div>
         <div class="control-group">
-          <button id="downloadBtn" class="btn btn-primary" disabled>📥 下载 PNG</button>
+          <button id="downloadBtn" class="btn btn-primary" disabled
+                  aria-describedby="downloadHint">📥 下载 PNG</button>
+          <!-- 禁用原因必须可被读屏取到：disabled 按钮不可聚焦，读屏拿不到原因（见 REVIEW.md M5） -->
+          <span class="visually-hidden" id="downloadHint">请先上传图片并框选区域，生成图纸后即可下载</span>
           <button id="shareBtn" class="btn btn-share" hidden>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
               <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
             </svg>
@@ -133,7 +145,10 @@
     <section class="preview-section" id="previewSection" hidden>
       <h2 class="section-title">图纸预览</h2>
       <div class="preview-container">
-        <canvas id="previewCanvas" class="preview-canvas"></canvas>
+        <!-- 预览是工具的唯一产出物，必须让读屏用户也能感知（见 REVIEW.md M4） -->
+        <canvas id="previewCanvas" class="preview-canvas"
+                role="img"
+                aria-label="拼豆图纸预览"></canvas>
       </div>
       <p class="preview-info" id="previewInfo"></p>
     </section>
@@ -158,10 +173,15 @@
     </section>
 
     <!-- ====== 加载提示 ====== -->
+    <!-- aria-live：让读屏用户听到"正在生成/已生成"，而不是静默等待（见 REVIEW.md M5） -->
     <div class="loading-overlay" id="loadingOverlay" hidden>
       <div class="loading-spinner"></div>
-      <p class="loading-text" id="loadingText">正在生成图纸…</p>
+      <p class="loading-text" id="loadingText" role="status" aria-live="polite">正在生成图纸…</p>
     </div>
+
+    <!-- ====== 结果播报（读屏专用，视觉隐藏） ====== -->
+    <!-- 生成完成、尺寸变化等状态由 JS 写入；不占视觉空间（见 REVIEW.md M5） -->
+    <p class="visually-hidden" id="liveStatus" role="status" aria-live="polite"></p>
 
     <!-- ====== 全局提示条（与当前显示的分区无关，任何阶段都可见） ====== -->
     <div class="toast" id="toast" role="alert" aria-live="assertive" hidden></div>
@@ -170,7 +190,7 @@
     <div class="install-banner" id="installBanner" hidden>
       <span class="install-text">📌 将拼豆图纸添加到主屏幕，方便随时使用</span>
       <button class="install-btn" id="installBtn">添加</button>
-      <button class="install-close" id="installClose">✕</button>
+      <button class="install-close" id="installClose" aria-label="关闭安装提示">✕</button>
     </div>
 
     <!-- ====== 隐藏画布用于像素采样 ====== -->
@@ -183,9 +203,14 @@
   <script src="color-palette.js"></script>
   <script src="app.js"></script>
   <script>
+    // Service Worker 注册。
+    // 失败时**不能在控制台完全静默** —— 否则"离线功能不生效"无从排查（见 REVIEW.md n4）。
+    // 用户可见层面仍保持安静（不影响主流程），只在控制台留下可诊断的信息。
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('[拼豆] Service Worker 注册失败，离线功能不可用：', err);
+        });
       });
     }
   </script>
