@@ -13,50 +13,51 @@
 //    （REVIEW.md M8）：JS 曾用 maxTouchPoints，会导致触摸屏笔记本上
 //    JS 判定与 CSS 判定相反、界面提示与实际 UI 错配。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ----- DOM 引用 -----
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+export const $ = (sel) => document.querySelector(sel);
+export const $$ = (sel) => document.querySelectorAll(sel);
 
-const uploadSection = $('#uploadSection');
-const uploadZone = $('#uploadZone');
-const fileInput = $('#fileInput');
-const uploadError = $('#uploadError');
-const viewerSection = $('#viewerSection');
-const viewerWrapper = $('#viewerWrapper');
-const viewerCanvas = $('#viewerCanvas');
+export const uploadSection = $('#uploadSection');
+export const uploadZone = $('#uploadZone');
+export const fileInput = $('#fileInput');
+export const uploadError = $('#uploadError');
+export const viewerSection = $('#viewerSection');
+export const viewerWrapper = $('#viewerWrapper');
+export const viewerCanvas = $('#viewerCanvas');
 // 注：#selectionOverlay 是纯布局容器（无 JS 逻辑），不在此取引用 ——
 // 原先的 selectionOverlay 变量是死引用（全项目 0 处使用，见 REFACTOR.md §3.4）
-const selectionBox = $('#selectionBox');
-const viewerHint = $('#viewerHint');
-const viewerHint2 = $('#viewerHint2');
-const viewerHint4 = $('#viewerHint4');
-const controlsSection = $('#controlsSection');
-const downloadBtn = $('#downloadBtn');
-const previewSection = $('#previewSection');
-const previewCanvas = $('#previewCanvas');
-const previewInfo = $('#previewInfo');
-const statsSection = $('#statsSection');
-const statsBody = $('#statsBody');
-const statsFoot = $('#statsFoot');
-const offscreenCanvas = $('#offscreenCanvas');
-const downloadCanvas = $('#downloadCanvas');
-const customW = $('#customW');
-const customH = $('#customH');
-const applyCustom = $('#applyCustom');
-const simplifySlider = $('#simplifySlider');
-const simplifyValue = $('#simplifyValue');
-const rulerToggle = $('#rulerToggle');
-const cameraInput = $('#cameraInput');
-const cameraBtn = $('#cameraBtn');
-const shareBtn = $('#shareBtn');
-const loadingOverlay = $('#loadingOverlay');
-const loadingText = $('#loadingText');
-const installBanner = $('#installBanner');
-const installBtn = $('#installBtn');
-const installClose = $('#installClose');
-const viewerHint3 = $('#viewerHint3');
+export const selectionBox = $('#selectionBox');
+export const viewerHint = $('#viewerHint');
+export const viewerHint2 = $('#viewerHint2');
+export const viewerHint4 = $('#viewerHint4');
+export const controlsSection = $('#controlsSection');
+export const downloadBtn = $('#downloadBtn');
+export const previewSection = $('#previewSection');
+export const previewCanvas = $('#previewCanvas');
+export const previewInfo = $('#previewInfo');
+export const statsSection = $('#statsSection');
+export const statsBody = $('#statsBody');
+export const statsFoot = $('#statsFoot');
+export const offscreenCanvas = $('#offscreenCanvas');
+export const downloadCanvas = $('#downloadCanvas');
+export const customW = $('#customW');
+export const customH = $('#customH');
+export const applyCustom = $('#applyCustom');
+export const simplifySlider = $('#simplifySlider');
+export const simplifyValue = $('#simplifyValue');
+export const rulerToggle = $('#rulerToggle');
+export const cameraInput = $('#cameraInput');
+export const cameraBtn = $('#cameraBtn');
+export const shareBtn = $('#shareBtn');
+export const loadingOverlay = $('#loadingOverlay');
+export const loadingText = $('#loadingText');
+export const installBanner = $('#installBanner');
+export const installBtn = $('#installBtn');
+export const installClose = $('#installClose');
+export const viewerHint3 = $('#viewerHint3');
 
 // 触摸设备检测。
 // ⚠️ 判据必须与 style.css 的 `@media (pointer: coarse)` **完全一致**（见 REVIEW.md M8）：
@@ -65,7 +66,7 @@ const viewerHint3 = $('#viewerHint3');
 // 触摸屏笔记本上 JS 判定"是触摸设备"（显示「双指缩放/平移」提示），
 // 而 CSS 判定"是桌面"（显示桌面拖拽上传区），界面提示与实际 UI 错配。
 // 统一走 CSS 同一判据，二者永远同向。
-const isTouchDevice = (() => {
+export const isTouchDevice = (() => {
   if (typeof window.matchMedia === 'function') {
     return window.matchMedia('(pointer: coarse)').matches;
   }

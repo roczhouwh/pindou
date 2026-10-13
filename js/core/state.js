@@ -1,3 +1,5 @@
+import { viewerCanvas } from './dom.js';
+
 // ============================================================
 // js/core/state.js — 导出上限常量、全局 state、初始化
 // ============================================================
@@ -14,14 +16,15 @@
 //    其消费方在 js/pipeline/simplify.js —— 改这里要同步那边。
 //
 // 本文件依赖 js/core/dom.js（用到了 viewerCanvas 等引用），故必须排在其后。
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // 导出画布像素上限。iOS Safari 内核（所有 WKWebView）约 16.78MP（4096²），
 // 且**单边也不得超过 4096**。超过时 toBlob 会静默回 null（见 REVIEW.md C2）。
-const MAX_EXPORT_MP = 16.78;
-const MAX_EXPORT_SIDE = 4096;
+export const MAX_EXPORT_MP = 16.78;
+export const MAX_EXPORT_SIDE = 4096;
 // 期望的导出倍率（2x 高清）。设备允许时会用满，否则自动下调。
-const MAX_EXPORT_DPR = 2;
+export const MAX_EXPORT_DPR = 2;
 
 /**
  * **常开**近似色合并的阈值（**平方**距离 —— `colorDistance()` 返回的就是平方值）。
@@ -37,13 +40,13 @@ const MAX_EXPORT_DPR = 2;
  * ⚠️ 这一层**独立于「简化滑块」常开**：滑块是用户主动的强度选择，
  * 而近似色合并是针对"色板自身存在的近同色对"的修正，默认状态就必须生效。
  */
-const AUTO_MERGE_DIST_SQ = 16;
+export const AUTO_MERGE_DIST_SQ = 16;
 
 // ----- 状态 -----
 // ⚠️ 所有字段必须在**此处**声明后再使用（REFACTOR.md §2.3 的教训：
 // 此前 dragSelection / rawGridData / rawColorCounts 是运行时动态挂上去的"影子字段"，
 // 读代码的人看不到它们，改 state 时必然漏改）。
-const state = {
+export const state = {
   image: null,
   imageW: 0,
   imageH: 0,
@@ -124,7 +127,7 @@ const state = {
 };
 
 // ----- 初始化 -----
-const viewerCtx = viewerCanvas.getContext('2d');
+export const viewerCtx = viewerCanvas.getContext('2d');
 
 /**
  * 把 CSS 变量里的主题色同步到 <meta name="theme-color">。

@@ -1,3 +1,6 @@
+import { cameraInput } from '../core/dom.js';
+import { handleFile } from './upload.js';
+
 // ============================================================
 // js/input/camera.js — 相机（移动端拍照上传）
 // ============================================================
@@ -10,7 +13,7 @@
 // ============================================================
 let cameraStream = null;
 
-function openCamera() {
+export function openCamera() {
   // 创建相机覆盖层
   let overlay = document.getElementById('cameraOverlay');
   if (!overlay) {
@@ -55,7 +58,7 @@ function openCamera() {
   }
 }
 
-function capturePhoto() {
+export function capturePhoto() {
   const video = document.getElementById('cameraVideo');
   if (!video || !video.videoWidth) return;
 
@@ -85,7 +88,7 @@ function capturePhoto() {
 /** 拍照用的复用画布（见 REVIEW.md m8） */
 let captureCanvas = null;
 
-function closeCamera() {
+export function closeCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach(t => t.stop());
     cameraStream = null;

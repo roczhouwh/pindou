@@ -3,7 +3,7 @@
 // 来源: https://www.peiseka.com/pindouseka.html
 // ============================================================
 
-const PERLER_PALETTE = [
+export const PERLER_PALETTE = [
   { name: "A1", hex: "#FAF4C8", r: 250, g: 244, b: 200 },
   { name: "A2", hex: "#FFFFD5", r: 255, g: 255, b: 213 },
   { name: "A3", hex: "#FEFF8B", r: 254, g: 255, b: 139 },
@@ -232,7 +232,7 @@ const PERLER_PALETTE = [
 // ============================================================
 
 /** 计算两个 RGB 颜色之间的欧氏距离 */
-function colorDistance(c1, c2) {
+export function colorDistance(c1, c2) {
   const dr = c1.r - c2.r;
   const dg = c1.g - c2.g;
   const db = c1.b - c2.b;
@@ -240,7 +240,7 @@ function colorDistance(c1, c2) {
 }
 
 /** 最近邻：找到色板中与目标颜色最接近的颜色 */
-function findNearestColor(target) {
+export function findNearestColor(target) {
   let best = PERLER_PALETTE[0];
   let bestDist = Infinity;
   for (const c of PERLER_PALETTE) {

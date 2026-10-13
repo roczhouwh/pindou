@@ -209,35 +209,11 @@
 
   </main>
 
-  <script src="color-palette.js"></script>
-  <!-- ⚠️ 顺序即依赖，**层次不能颠倒**。裸 script 之间共享全局词法环境，
-       顺序错了会抛 TDZ 错误（真实 Chrome 实测：`Cannot access '$' before initialization`）。
-       层次：core（DOM 引用 / state）→ input / pipeline / viewer
-             → output → ui → main.js（编排层，最后加载）
-       此阶段刻意不用 type="module" —— 步骤 0 尚未执行。 -->
-  <script src="js/core/dom.js"></script>
-  <script src="js/core/state.js"></script>
-  <!-- ⚠️ camera.js 必须排在 upload.js **之前**：
-       upload.js 顶层注册了 `window.addEventListener('pagehide', closeCamera)`，
-       注册时会**立即求值** closeCamera —— 若 camera.js 尚未加载就会抛
-       `ReferenceError: closeCamera is not defined`。
-       反向依赖（camera.js 调 handleFile）发生在函数体内、执行时才求值，故不受顺序影响。 -->
-  <script src="js/input/camera.js"></script>
-  <script src="js/input/upload.js"></script>
-  <script src="js/pipeline/render.js"></script>
-  <script src="js/pipeline/simplify.js"></script>
-  <script src="js/pipeline/grid.js"></script>
-  <script src="js/viewer/viewer.js"></script>
-  <script src="js/viewer/selection.js"></script>
-  <script src="js/viewer/panzoom.js"></script>
-  <script src="js/output/preview.js"></script>
-  <script src="js/output/stats.js"></script>
-  <script src="js/output/export.js"></script>
-  <script src="js/ui/a11y.js"></script>
-  <script src="js/ui/grid-select.js"></script>
-  <script src="js/ui/loading.js"></script>
-  <script src="js/ui/install.js"></script>
-  <script src="js/main.js"></script>
+  <!-- ⚠️ **只保留这一个入口**。<script type="module"> 取代了原来的 19 个裸 <script>：
+       依赖顺序由各模块自己的 import 语句表达，不再靠标签顺序维护。
+       type="module" 的代价：ESM 受 CORS 限制，**双击 index.html 不再可用**，
+       必须经 HTTP 服务打开（用户已确认接受，见 REFACTOR §六 决策点 1）。 -->
+  <script type="module" src="js/main.js"></script>
   <script>
     // Service Worker 注册。
     // 失败时**不能在控制台完全静默** —— 否则"离线功能不生效"无从排查（见 REVIEW.md n4）。

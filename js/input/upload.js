@@ -1,3 +1,10 @@
+import { $, cameraBtn, cameraInput, fileInput, uploadError, uploadZone } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { closeCamera, openCamera } from './camera.js';
+import { markActiveGridBtn } from '../ui/a11y.js';
+import { resetSimplify } from '../ui/grid-select.js';
+import { showViewer } from '../viewer/viewer.js';
+
 // ============================================================
 // js/input/upload.js — 图片上传（选择/拖拽/相机入口）与阶段提示
 // ============================================================
@@ -66,7 +73,7 @@ uploadZone.addEventListener('drop', (e) => {
   if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
 });
 
-function handleFile(file) {
+export function handleFile(file) {
   uploadError.hidden = true;
 
   // 格式验证
@@ -110,7 +117,7 @@ function handleFile(file) {
   reader.readAsDataURL(file);
 }
 
-function showError(msg) {
+export function showError(msg) {
   uploadError.textContent = msg;
   uploadError.hidden = false;
 }
@@ -122,7 +129,7 @@ function showError(msg) {
  * 这里用独立的固定定位元素，不受各分区显隐影响。
  */
 let toastTimer = null;
-function showToast(msg, duration = 6000) {
+export function showToast(msg, duration = 6000) {
   const el = document.getElementById('toast');
   if (!el) return;
   el.textContent = msg;

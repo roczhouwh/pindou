@@ -1,3 +1,13 @@
+import { findNearestColor } from '../../color-palette.js';
+import { $, downloadBtn, offscreenCanvas } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { showToast } from '../input/upload.js';
+import { renderPreview } from '../output/preview.js';
+import { renderStats } from '../output/stats.js';
+import { applySimplify, cloneGrid } from './simplify.js';
+import { announce, clamp } from '../ui/a11y.js';
+import { hideLoading, showLoading } from '../ui/loading.js';
+
 // ============================================================
 // js/pipeline/grid.js — 网格生成（逐格采样 → 色板映射）
 // ============================================================
@@ -12,9 +22,10 @@
 //
 // ⚠️ 两者**必须同文件** —— 入口与实现是同一职责，拆开会让 ① 的"唯一入口"失效。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // 它调用的 showLoading / hideLoading / showToast / announce / renderPreview /
-// renderStats / applySimplify 等来自其它文件，靠共享全局词法环境解析。
+// renderStats / applySimplify 等来自其它模块，由上方 import 显式引入。
 // ============================================================
 // ============================================================
 // 5. 网格生成 + 色板映射
@@ -34,7 +45,7 @@
  * > 本函数此前是「函数声明 + 文件末尾猴补丁整体覆盖」的形态，
  * > 已按 REFACTOR.md §2.1 拆除。**不要再对函数做猴补丁** —— 它是模块化的硬阻塞。
  */
-function generateGrid() {
+export function generateGrid() {
   const startTime = Date.now();
   showLoading('正在生成图纸…');
   // 用 rAF 把重活推到下一帧：先让遮罩真正画出来，再阻塞主线程采样
@@ -59,7 +70,7 @@ function generateGrid() {
  * **请勿直接调用** —— 走 `generateGrid()` 入口，否则加载遮罩不会被驱动，
  * 用户观感就是"点了没反应"（见 CLAUDE.md「按阶段选对函数」的同类教训）。
  */
-function generateGridCore() {
+export function generateGridCore() {
   if (!state.image) return;
 
   const { x, y, w, h } = state.selection;

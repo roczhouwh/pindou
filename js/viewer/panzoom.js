@@ -1,3 +1,9 @@
+import { viewerWrapper } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { clamp } from '../ui/a11y.js';
+import { updateSelectionBox } from './selection.js';
+import { renderViewer, resizeViewerCanvas } from './viewer.js';
+
 // ============================================================
 // js/viewer/panzoom.js — 缩放与平移（右键拖拽 / 滚轮 / 双指 / 窗口尺寸）
 // ============================================================
@@ -8,7 +14,8 @@
 //
 // ⚠️ 双指缩放的夹取范围是 0.2~5，与滚轮一致。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // 右键拖拽平移
 viewerWrapper.addEventListener('contextmenu', (e) => e.preventDefault());

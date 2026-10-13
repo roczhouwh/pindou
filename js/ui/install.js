@@ -1,3 +1,5 @@
+import { installBanner, installBtn, installClose, shareBtn } from '../core/dom.js';
+
 // ============================================================
 // js/ui/install.js — PWA 安装提示
 // ============================================================

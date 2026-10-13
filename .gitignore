@@ -1,2 +1,9 @@
 test-screenshot.png
 __pycache__/
+
+# 步骤 0（改 ESM）迁移时由 .pindou-devtools/migrate-to-esm.js 生成的本地备份。
+# ⚠️ **不要提交**：它是"改写前"的快照，与 git 历史重复，且写的是
+#    `js__core__dom.js` 这种扁平化文件名（不是可用目录结构）——
+#    提交进来只会让人误以为能用。
+#    真正要回退请用 git（迁移前的基线是 commit 56bfaac）。
+.esm-backup/

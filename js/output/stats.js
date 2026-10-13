@@ -1,3 +1,6 @@
+import { $, statsBody, statsFoot, statsSection } from '../core/dom.js';
+import { state } from '../core/state.js';
+
 // ============================================================
 // js/output/stats.js — 颜色用量统计表
 // ============================================================
@@ -7,13 +10,14 @@
 //    rebuildColorCounts / applySimplify 写入）。本模块不改变任何状态，
 //    这是 REFACTOR 附录 A「gridData/colorCounts 建议改为单向」的第一步。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 7. 颜色统计
 // ============================================================
 
-function renderStats() {
+export function renderStats() {
   if (!state.colorCounts) return;
   statsSection.hidden = false;
 

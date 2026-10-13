@@ -1,3 +1,12 @@
+import { $, $$, applyCustom, customH, customW, rulerToggle, simplifySlider, simplifyValue } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { showToast } from '../input/upload.js';
+import { renderPreview } from '../output/preview.js';
+import { renderStats } from '../output/stats.js';
+import { generateGrid } from '../pipeline/grid.js';
+import { applySimplify } from '../pipeline/simplify.js';
+import { announce, markActiveGridBtn } from './a11y.js';
+
 // ============================================================
 // js/ui/grid-select.js — 网格尺寸选择（预设 / 自定义 / 简化滑块 / 标尺开关）
 // ============================================================
@@ -73,7 +82,7 @@ simplifySlider.addEventListener('input', () => {
  * 重新上传 / 重置时必须调用：否则新图会被上一张图的强度静默简化，
  * 而滑块 UI 仍显示旧值，用户会误以为是新图本身的色彩问题（见 REVIEW.md C1）。
  */
-function resetSimplify() {
+export function resetSimplify() {
   state.simplify = 0;
   simplifySlider.value = 0;
   simplifyValue.textContent = '关闭';

@@ -1,3 +1,5 @@
+import { loadingOverlay, loadingText } from '../core/dom.js';
+
 // ============================================================
 // js/ui/loading.js — 加载遮罩
 // ============================================================
@@ -14,11 +16,11 @@
 // 已按 REFACTOR.md §2.1 拆除 —— 现在由 generateGrid() 入口**显式**驱动，
 // showLoading / hideLoading 就在这里定义，被入口直接调用。
 
-function showLoading(msg) {
+export function showLoading(msg) {
   loadingText.textContent = msg || '正在处理…';
   loadingOverlay.hidden = false;
 }
 
-function hideLoading() {
+export function hideLoading() {
   loadingOverlay.hidden = true;
 }

@@ -1,3 +1,10 @@
+import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
+import { state, viewerCtx } from '../core/state.js';
+import { generateGrid } from '../pipeline/grid.js';
+import { resetSimplify } from './grid-select.js';
+import { updateSelectionBox } from '../viewer/selection.js';
+import { renderViewer, resizeViewerCanvas } from '../viewer/viewer.js';
+
 // ============================================================
 // js/ui/a11y.js — 无障碍播报与键盘通路
 // ============================================================
@@ -8,7 +15,8 @@
 // ⚠️ 键盘通路是 WCAG 2.1.1（A 级）要求，C3 补的；不要删。
 //    viewer 区域可聚焦（tabindex 由 HTML 提供），聚焦后才响应，避免抢占页面滚动。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 工具函数
@@ -19,7 +27,7 @@
  * 用于生成完成、尺寸变化等「用户看不见但需要知道」的状态（见 REVIEW.md M5）。
  */
 let liveTimer = null;
-function announce(msg) {
+export function announce(msg) {
   const el = document.getElementById('liveStatus');
   if (!el) return;
   // 先清空再写入：相同的字符串连续写入不会触发 aria-live 播报
@@ -29,7 +37,7 @@ function announce(msg) {
 }
 
 /** 网格尺寸按钮的 aria-pressed 与 active class 必须同步（见 CLAUDE.md 双保险思路） */
-function markActiveGridBtn(w) {
+export function markActiveGridBtn(w) {
   $$('.grid-btn').forEach((b) => {
     const on = b.dataset.w === String(w);
     b.classList.toggle('active', on);
@@ -120,6 +128,6 @@ $('#resetBtn').addEventListener('click', () => {
   fileInput.value = '';
 });
 
-function clamp(val, min, max) {
+export function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }

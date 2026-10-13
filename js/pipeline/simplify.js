@@ -1,3 +1,6 @@
+import { PERLER_PALETTE, colorDistance } from '../../color-palette.js';
+import { AUTO_MERGE_DIST_SQ, state } from '../core/state.js';
+
 // ============================================================
 // js/pipeline/simplify.js — 颜色简化（含常开近似色合并）
 // ============================================================
@@ -12,10 +15,11 @@
 //   ② 合并表必须是「**静态色板级**」（只看色板，与图上出现哪些色无关），
 //      否则上述漂移会重新出现。判据要用**纯 H12 图**（图上没有 E16 才区分得出来）。
 //
-// ⚠️ `AUTO_MERGE_DIST_SQ` 仍留在 app.js（它靠近顶部的常量区）。
+// ⚠️ `AUTO_MERGE_DIST_SQ` **不**在本文件里 —— 它在 `js/core/state.js` 的常量区
+//    （与 `MAX_EXPORT_*` 放一起），本文件通过上面的 import 取用。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export，
-// 顶层声明与其它文件共享同一全局词法环境。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 5.5 颜色简化 — 合并映射后的相近颜色
@@ -26,12 +30,12 @@
  * 关键点是格子对象 —— `findNearestColor()` 返回的是 PERLER_PALETTE 里的
  * 对象引用，浅拷贝会让格子仍然指向全局色板（见 REVIEW.md n7）。
  */
-function cloneGrid(grid) {
+export function cloneGrid(grid) {
   return grid.map((row) => row.map((cell) => (cell ? { ...cell } : null)));
 }
 
 /** 从 gridData 重建 colorCounts */
-function rebuildColorCounts(grid) {
+export function rebuildColorCounts(grid) {
   const map = new Map();
   for (const row of grid) {
     for (const cell of row) {
@@ -71,7 +75,7 @@ function rebuildColorCounts(grid) {
  * 则同一张图 29×29 可能只出现 H12（图内无 E16 可并，H12 保留）、
  * 52×52 同时出现两者（H12 并入 E16）—— **漂移依旧存在**，等于白改。
  */
-function applySimplify() {
+export function applySimplify() {
   const threshold = state.simplify;
   const raw = state.rawGridData;
   if (!raw) return;
@@ -168,7 +172,7 @@ const staticMergeCache = new Map();
  * @param {number} distSq 平方距离阈值（`colorDistance()` 的量纲）
  * @returns {Map<string, string>} 源色号 hex → 目标色号 hex
  */
-function getStaticMergeMap(distSq) {
+export function getStaticMergeMap(distSq) {
   const cached = staticMergeCache.get(distSq);
   if (cached) return cached;
 

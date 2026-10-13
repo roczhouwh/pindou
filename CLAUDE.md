@@ -5,26 +5,33 @@
 ## 技术栈
 
 - 原生 HTML / CSS / JS，零依赖
+- **原生 ESM**（`<script type="module">` 单入口）—— **无构建工具、无 `package.json`**
 - Canvas API 完成所有图像处理与渲染
 - MARD 221 色标准色板（来源：peiseka.com）
 - PWA：manifest.json + Service Worker + 离线缓存
 
-## ⚠️ 正在进行中的结构改造 —— 动手前先读 [NEXT.md](NEXT.md)
+## ✅ 结构改造已完成（步骤 0 + 5）—— 现状：原生 ESM + 19 个模块
 
-> **步骤 5（拆分文件）已完成** ✅：`app.js` 2136 行 → **19 个模块，`app.js` 已删除**。
-> **步骤 0（改原生 ESM）尚未开工** —— 下一步入口、硬约束、已实测结论**全部记在
-> [NEXT.md](NEXT.md)**，改代码前务必先读它。
+> **`app.js` 已删除**，内容全部迁至 `js/` 下 19 个模块；
+> **裸 `<script src>` 已换成单入口 `<script type="module">`**。
+> 回归测试 **21 套件 / 193 断言全绿**（`node run-all.js`，退出码 0 = 全绿）
+> **+ 真实 Chrome 端到端 7/7**（`node verify-browser-split.js`）。
 >
-> ⚠️ 本文件下面的「文件结构」等章节**仍在描述改造前的单文件形态**，尚未同步
-> （属改造收尾工作，见 NEXT.md §三）。**以仓库实际文件为准。**
+> - **执行记录、与原计划的差异、脚手架新架构** → [REFACTOR.md](REFACTOR.md) **§八**
+> - **还剩什么** → 只剩 **步骤 6**（拆 `pointermove` 三合一回调、把跨领域调用
+>   收拢到 `js/main.js`），属收尾性质，**不再是阻塞**
+> - [NEXT.md](NEXT.md) **已过期**（内容已并入 REFACTOR §八），保留仅为避免旧链接 404
+>
+> ⚠️ **本次改造唯一的功能性代价**：ESM 受 CORS 限制，**`file://` 双击打开不再可用**，
+> 必须经 HTTP 服务打开（用户已确认接受，REFACTOR §六 决策点 1）。
 
 ## 文件结构
 
 ```
 index.html          — 页面结构（上传区 / 查看器 / 控制栏 / 预览 / 统计 / 拍照入口 / 加载动画 / 安装提示）
+                       ⚠️ 只有一个 <script type="module" src="js/main.js">（ESM 单入口）
 style.css           — 样式，CSS 变量主题，响应式适配（640px/400px 断点），触摸设备适配
-app.js              — ⚠️ **已删除**（内容按 REFACTOR §4.2 迁至 js/ 下，见 NEXT.md §四）
-color-palette.js    — PERLER_PALETTE 221 色 + findNearestColor()
+color-palette.js    — PERLER_PALETTE 221 色 + findNearestColor() + colorDistance()（ESM 模块）
 manifest.json       — PWA 清单（名称、图标、standalone 模式）
 sw.js               — Service Worker（cache-first 离线缓存策略）
 icon.svg            — 应用图标源文件（8×8 彩色拼豆网格）
@@ -35,55 +42,88 @@ icon-512-maskable.png — 512×512 maskable 图标
 README.md           — 使用说明（面向用户）
 PLAN.md             — 开发计划：待做项优先级 + A4 打印方案
 REVIEW.md           — 代码审查报告：37 项问题（**已全部处理**）+ 「已核实无问题」清单 + 测试脚手架说明
-REFACTOR.md         — 代码结构对策：模块划分、阻塞点、防复发规则
+REFACTOR.md         — 代码结构对策：模块划分、阻塞点、防复发规则、**§八 = 步骤 0 执行记录**
 CLAUDE.md           — 项目文档（本文件）
+
+js/core/            dom.js      — $ / $$ / DOM 引用 / isTouchDevice
+                    state.js    — 常量 / state / viewerCtx / 主题同步
+js/input/           upload.js   — handleFile / showError / showToast / 上传区监听
+                    camera.js   — openCamera / capturePhoto / closeCamera
+js/viewer/          viewer.js   — computeImageRect / renderViewer / resizeViewerCanvas / scheduleViewerRedraw
+                    selection.js— updateSelectionBox / 选框拖拽
+                    panzoom.js  — 右键平移 / 滚轮 / 双指 / 窗口尺寸
+js/pipeline/        render.js   — drawGrid / drawRuler / rulerMetrics / pickTextColor / FONT_STACK
+                    simplify.js — applySimplify / getStaticMergeMap / cloneGrid
+                    grid.js     — generateGrid / generateGridCore
+js/output/          preview.js  — fitPreviewGrid / renderPreview
+                    stats.js    — renderStats
+                    export.js   — computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
+js/ui/              a11y.js     — announce / markActiveGridBtn / 键盘通路 / clamp
+                    grid-select.js — 网格预设 / 自定义 / 简化滑块 / 标尺开关
+                    loading.js  — showLoading / hideLoading
+                    install.js  — PWA 安装提示
+js/main.js          — **模块入口**（ESM 单入口；当前刻意不承载逻辑，是步骤 6 的落点）
+                       ⚠️ **它的 import 列表 = "页面会加载哪些文件"** ——
+                       ESM 从入口的 import 出发解析模块图，**没被 import 到的文件
+                       浏览器根本不会请求**。新增模块必须在这里补一条 import
+                       （若它不被其它模块引用），否则页面会静默少功能。
+                       守护套件：`probe-verify-entry-chain.js`
 ```
+
+> ⚠️⚠️ **加/改模块前必读** → [REFACTOR.md](REFACTOR.md) **§8.7「单入口 ESM 的两个静默假绿陷阱」**。
+> 本轮踩到两个**测试全绿、页面却完全不能跑**的缺陷：
+> ① **入口没有 import** ⇒ 18 个模块一个都没被浏览器加载
+>    （`run-all.js` 的脚手架按模块清单**逐个 import**，**绕过了入口**，所以看不见）；
+> ② **`check()` 不 `await` 而断言体是 async** ⇒ 报告全绿但断言根本没跑完。
+> 两者分别靠**突变测试**与**真实浏览器**抓出 —— **都不能省**。
 
 > **改代码前先读 [REVIEW.md](REVIEW.md)** —— 特别是 §五「明确核实"没问题"的项」，
 > 避免为"修问题"而改坏**本来正确**的代码。
-> **§九 说明了怎么跑回归测试**（20 个套件 / 188 条断言）。
+> **§九 说明了怎么跑回归测试**（21 个套件 / 193 条断言）。
 
 > **🧪 回归测试**（脚手架在仓库**之外**：`F:\claudeapp\demo\.pindou-devtools\`，刻意不污染零依赖交付物）：
 > ```powershell
 > cd F:\claudeapp\demo\.pindou-devtools
 > node run-all.js      # 一键跑全部，退出码 0 = 全绿
 > ```
-> 它**加载真实的 index.html + app.js**（不复制逻辑），断言落在**用户可感知的输出**上。
+> 它**加载真实的 index.html + js/ 模块**（不复制逻辑），断言落在**用户可感知的输出**上。
+> **ESM 化后它改为「每个用例一个 runner 子进程 + 真实 `import()`」**（REFACTOR §8.4）。
 > 改完代码请跑一遍 —— 这套脚手架正是为了拦住"改了 A 弄坏 B"而建的。
+>
+> ⚠️ **写测试时两条硬约束**（本轮真实踩到，详见 REFACTOR §8.4）：
+> 1. **`app.inner.*` 是异步的，必须 `await`** —— 漏了会**偶发红**（实测约 40% 概率），
+>    极难排查。模板字面量里不能直接 await。
+> 2. **不能"先取函数再调用"**（`const f = app.inner.x; f()`）—— 拿到的是 Promise。
 
 ## ⚠️ 代码结构约定（改代码前必读）
 
-`app.js` 当前 **2137 行、承载 12 个特性域、29+ 个函数、28 处顶层监听**，已进入临界区。
-**新增功能不得再堆入单文件。**
+**模块边界已建立**（原 `app.js` 2137 行的单文件形态**已不存在**）。
+**新增功能必须按特性域落位到 `js/` 下的模块**，不要再出现"跨领域大文件"。
 
-> ⚠️ **已发生两次显式偏离，均为用户的明确选择**（都不是遗忘）：
->
-> | # | 功能 | 未落位到 | 应去的位置 |
-> |---|---|---|---|
-> | 1 | PLAN §3.1 近似色合并（约 +90 行） | — | `js/pipeline/simplify.js` |
-> | 2 | **PLAN §五 第一批第 3 项 行列标尺**（约 +230 行） | — | `js/pipeline/render.js` |
->
-> 第 1 次在「新建 `js/` 用裸 `<script src>` 加载」「写进 `app.js`」「先做 ESM 改造」中选了后者；
-> 第 2 次在「扩展 `app.js` 里的 `drawGrid`」「新建 `js/pipeline/render.js` + 裸 `<script src>`」
-> 「先做步骤 0（ESM）」中同样选了前者。**理由一致**：步骤 0（ESM）尚未决策、
-> 且会先让脚手架失效（§7.3）—— 在"结构正确"与"保住 188 条断言"之间选了后者。
->
-> **两次偏离都属有意记录的技术债**，偿还计划：步骤 5 模块搬迁时，
+> ⚠️ **历史上曾发生两次显式偏离，均为用户的明确选择**（都不是遗忘）：
+> `applySimplify` 与行列标尺曾被直接写进 `app.js` 而非各自的模块。
+> **这两笔技术债已在步骤 5（模块搬迁）中还清**：
 > `applySimplify` / `rebuildColorCounts` / `getStaticMergeMap` / `staticMergeCache` /
-> `AUTO_MERGE_DIST_SQ` 移入 `js/pipeline/simplify.js`；
-> **`rulerMetrics` / `drawRuler` / `RULER_*` 常量 / `fitPreviewGrid` 随 `drawGrid` / `pickTextColor` /
-> `FONT_STACK` 一并移入 `js/pipeline/render.js`**（REFACTOR §4.2 已预留该位置）。
-> **这不构成放宽规则 1 的先例**：后续新功能仍应按 §4.2 归位，或先讨论 ——
-> 尤其不要据此认为"ESM 可以一直不做"，该偏离的根因正是 ESM 未决。
+> `AUTO_MERGE_DIST_SQ` 已移入 `js/pipeline/simplify.js`；
+> `rulerMetrics` / `drawRuler` / `RULER_*` 常量 / `fitPreviewGrid` 随
+> `drawGrid` / `pickTextColor` / `FONT_STACK` 一并移入 `js/pipeline/render.js`。
+>
+> **⚠️ 偏离的根因是"ESM 未决"，而不是"规则可以放宽"** —— 现在 ESM 已落地，
+> 该借口**不再成立**。后续新功能仍应按 §4.2 归位，无归属时先讨论。
 
-**详见 [REFACTOR.md](REFACTOR.md)**（**§七 是本轮对落地顺序的实测复核**），其中三条为强约束：
+**详见 [REFACTOR.md](REFACTOR.md)**（**§七 = 落地顺序的实测复核；§八 = 步骤 0 执行记录**），
+其中三条为强约束：
 
 1. **新功能按特性域归位**（`js/` 下的 `input/` `viewer/` `pipeline/` `output/` `ui/`）；
    无归属时先讨论，不要默认写进主文件。
 2. **模块间不得直接互相调用**，跨领域一律经编排层（`main.js`）。
-3. **禁止对函数做猴补丁** —— 现存的 `generateGrid` 覆盖（文件末尾的「加载状态」段）
+   > ⚠️ **现状**：`main.js` 目前**刻意不承载逻辑** —— 跨领域编排的收拢是**步骤 6**，
+   > 尚未开始。**因此现在的跨领域 import 仍然存在**（依赖图里有 38 个环），
+   > 这是**已记录的待办**，不是可以继续扩散的先例。
+3. **禁止对函数做猴补丁** —— 原 `generateGrid` 覆盖（文件末尾的「加载状态」段）
    **✅ 已按 REFACTOR §7.1 步骤 1 拆除**：加载状态改由 `generateGrid()` 入口**显式**驱动，
-   真实实现迁为独立的 `generateGridCore()`。**今后不得再引入任何形式的猴补丁。**
+   真实实现迁为独立的 `generateGridCore()`（现在 `js/pipeline/grid.js`）。
+   **今后不得再引入任何形式的猴补丁。**
    > ⚠️ **改 `generateGrid` 前必读**：它是**唯一入口**，真实逻辑在 `generateGridCore()`。
    > 直接调 `generateGridCore()` 会绕过加载遮罩，用户观感就是"点了没反应"。
    > 另有一条**时序契约**：`generateGrid()` 返回时 `state.gridData` **仍是上一轮**的数据
@@ -93,24 +133,24 @@ CLAUDE.md           — 项目文档（本文件）
    > 而是"**把它改成 `const`，或经模块 `import` 后仍想重新赋值**"才会炸。
    > 结论（必须先拆）不变 —— 且该步**已完成**。
 
-> **🛠 结构改造的推荐顺序**（REFACTOR §7.1，已实测复核）：
+> **🛠 结构改造的顺序**（REFACTOR §7.1 实测复核）：
 > `1 拆猴补丁 → 2 抽 computeImageRect → 3b 拆 dragStart → 4 抽 drawGrid`
 > `→（改造测试脚手架）→ 0 改 ESM → 5 模块搬迁 → 6 拆 pointermove`
 >
-> **进度**：**✅ §7.1 的「前四步」已全部完成**（1 拆猴补丁 / 2 抽 `computeImageRect` /
-> 3b 拆 `dragStart` / 4 抽 `drawGrid`）。**按 §五 的建议，接下来回到 PLAN 的功能开发**；
-> 步骤 0（改 ESM）与步骤 5（模块搬迁）**建议再往后放**（会先破坏安全网）。
-> **关键点**：前四步**不碰模块系统**，全程在 `run-all.js` 保护下完成
-> （现 **20 套件 / 188 断言**，退出码 0 = 全绿）；
-> **步骤 0 会先让脚手架失效**（它靠 `window.eval` 拼接两文件，与 ESM 不兼容），
-> 所以必须与脚手架改造同批做。**先做有保护的，再做破坏保护的。**
-> **📌 PLAN §3.1（近似色合并）已按"新代码不阻塞于 ESM 决策"的方式落地** ——
-> 全程使用现有安全网，未触碰模块系统。这也再次说明：
-> **功能开发可以继续，ESM 决策不阻塞它。**
+> **进度**：**✅ 已完成到「5 模块搬迁」** ——
+> 前四步 + 步骤 0（ESM）+ 步骤 5（搬迁）**全部完成**，
+> 全程在 `run-all.js` 保护下推进（现 **21 套件 / 193 断言**，退出码 0 = 全绿，
+> 另有真实 Chrome 端到端 **7/7**）。
+> **只剩步骤 6**（拆 `pointermove` 三合一回调、把跨领域调用收拢到 `main.js`），
+> 属**收尾**性质，不再是阻塞。
+>
+> **📌 功能开发不受影响**：PLAN §3.1（近似色合并）与行列标尺都已落地，
+> A4 打印等后续功能可以直接按模块边界开工。
 
 > **`state` 字段必须先声明再使用** —— 3 个影子字段（`dragSelection` / `rawGridData` /
 > `rawColorCounts`）**已补齐声明**，并补充了 `touchStartCenter` / `aspectWarning`。
-> 新增字段请一律写进 `state` 字面量并加注释说明语义（哪些是归一化坐标、哪些是 client 像素）。
+> 新增字段请一律写进 `js/core/state.js` 的 `state` 字面量并加注释说明语义
+> （哪些是归一化坐标、哪些是 client 像素）。
 
 
 ## ⚠️ 错误提示：按阶段选对函数（踩过坑）
@@ -146,7 +186,7 @@ CLAUDE.md           — 项目文档（本文件）
 > 实测：29/52 → 2x；**78/104 → 1x（此前完全导不出）**。
 > 降档会如实写在 `#previewInfo` 上，不静默。
 
-## 关键状态 (app.js state)
+## 关键状态 (`js/core/state.js` 的 state)
 
 | 字段 | 说明 |
 |------|------|
@@ -393,14 +433,15 @@ python3 -m http.server 8080
 > 按名字调用 `python` 时 PATH 解析到真实安装，不受影响。
 > （教训：判断命令是否可用要用与真实用法一致的调用方式，别用 `Get-Command` 取路径再执行。）
 
-> **⚠️ 已决定改用原生 ESM（`<script type="module">`）** —— 见 [REFACTOR.md](REFACTOR.md) §4.1。
-> ESM 受 CORS 限制，`file://` 协议下无法加载模块，**因此"双击打开"不再可用**，这是已接受的代价。
-> 若只做静态预览而不涉及模块加载，可直接打开查看，但**功能不完整**。
+> **⚠️ 本项目已改用原生 ESM（`<script type="module">` 单入口）** —— 见 [REFACTOR.md](REFACTOR.md) §4.1、§八。
+> ESM 受 CORS 限制，`file://` 协议下无法加载模块，
+> **因此「双击 index.html」不再可用** —— 这是**已接受的代价**（用户已确认，REFACTOR §六 决策点 1）。
+> 双击只会看到**没有样式的空壳页面**（模块被 CORS 拦下，页面功能全无）。
 >
 > 仍不引入任何构建工具：原生 `import`/`export` 即可，无需 `package.json` 或打包步骤。
 >
-> **📌 现状（REFACTOR §7.1 前四步完成后）**：**ESM 尚未启用**，`index.html` 仍是裸 `<script src>`，
-> 代码仍全在 `app.js`（单文件共享作用域）。
-> 但**三个硬阻塞已全部解除**（猴补丁 / 坐标语义 / 重复逻辑），
-> 所以**现在未启用 ESM 是"选择"而非"受阻"** —— 启用前须先改造测试脚手架（§7.3），
-> 两者必须**同批**做。详见 [REFACTOR.md](REFACTOR.md) §7.1 与 §六 决策点 1。
+> **📌 现状**：**ESM 已启用**，`index.html` 是单入口 `<script type="module" src="js/main.js">`，
+> 代码分布在 `js/` 下 19 个模块，`app.js` 已删除。
+> 依赖顺序由各模块的 `import` 语句表达（**不再是** `<script>` 标签顺序），
+> 因此原来「标签顺序错了会抛 TDZ」的风险**已消失**。
+> 详见 [REFACTOR.md](REFACTOR.md) §八。

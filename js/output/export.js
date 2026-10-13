@@ -1,3 +1,8 @@
+import { $, downloadBtn, downloadCanvas, shareBtn } from '../core/dom.js';
+import { MAX_EXPORT_DPR, MAX_EXPORT_MP, MAX_EXPORT_SIDE, state } from '../core/state.js';
+import { showToast } from '../input/upload.js';
+import { FONT_STACK, drawGrid, drawRuler, rulerMetrics } from '../pipeline/render.js';
+
 // ============================================================
 // js/output/export.js — PNG 导出与分享
 // ============================================================
@@ -14,7 +19,8 @@
 // ⚠️ 失败提示必须用 `showToast`（全局 toast），**不能用 `showError`** ——
 //    后者写进 #uploadError，而 showViewer() 已把 #uploadSection 隐藏，消息会静默丢失。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 
 // ---- 按钮装配（随函数群一起搬迁；**不要漏**）----
@@ -32,7 +38,7 @@ shareBtn.addEventListener('click', () => {
   sharePNG();
 });
 
-function sharePNG() {
+export function sharePNG() {
   if (!state.gridData) return;
   const grid = state.gridData;
   const rows = grid.length;
@@ -76,7 +82,7 @@ function sharePNG() {
  * 这是 C2 的根治手段 —— 此前 78/104 只能"拦截 + 提示"，
  * 现在改为降到设备能承受的倍率后**照样导出**，用户不再被拒绝服务。
  */
-function computeDownloadSize() {
+export function computeDownloadSize() {
   const rows = state.gridData.length;
   const cols = state.gridData[0].length;
 
@@ -151,7 +157,7 @@ function pickExportDpr(canvasW, canvasH) {
  *
  * 返回 true 表示可以继续导出。
  */
-function checkExportSize(cols, rows) {
+export function checkExportSize(cols, rows) {
   const { canvasW, canvasH, dpr } = computeDownloadSize();
   const w = canvasW * dpr;
   const h = canvasH * dpr;
@@ -173,7 +179,7 @@ function checkExportSize(cols, rows) {
  * 降过倍率时**必须在界面上如实说明**（而不是静默降清晰度），
  * 所以渲染在常驻的 #previewInfo 里，不占用 toast。
  */
-function exportScaleNote() {
+export function exportScaleNote() {
   if (!state.gridData) return '';
   const { canvasW, canvasH, dpr } = computeDownloadSize();
   const mp = (canvasW * dpr * canvasH * dpr) / 1e6;
@@ -185,7 +191,7 @@ function exportScaleNote() {
 }
 
 /** 渲染下载用画布（网格 + 标题 + 图例），downloadPNG 和 sharePNG 共用 */
-function renderDownloadCanvas() {
+export function renderDownloadCanvas() {
   const grid = state.gridData;
   const {
     canvasW, canvasH, cellW, cellH, dpr, padding, titleHeight,
@@ -269,7 +275,7 @@ function renderDownloadCanvas() {
   }
 }
 
-function downloadPNG() {
+export function downloadPNG() {
   if (!state.gridData) return;
   const cols = state.gridData[0].length;
   const rows = state.gridData.length;

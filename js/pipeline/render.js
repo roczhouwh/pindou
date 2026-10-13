@@ -1,3 +1,5 @@
+import { $ } from '../core/dom.js';
+
 // ============================================================
 // js/pipeline/render.js — 网格绘制（预览与导出共用）
 // ============================================================
@@ -11,8 +13,8 @@
 //   · drawRuler 只画**边距区域**，网格本体仍归 drawGrid —— 不要把两者合并；
 //   · rulerMetrics 是纯函数，与 drawRuler 必须同模块（拆开会重现"边距算错→溢出容器"）。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export，
-// 顶层声明与其它文件共享同一全局词法环境。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 5.9 网格绘制 —— 预览与导出共用
@@ -22,7 +24,7 @@
 // 将来 PLAN 的行列标尺 / A4 打印也复用同一套绘制。
 
 /** 供网格与图例共用的字体栈。原本是 5 处字面量，改字体极易漏改（REFACTOR §3.1 重复项 #5） */
-const FONT_STACK = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+export const FONT_STACK = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 /**
  * 行列标尺的**密度阈值**：格子短边 ≥ 此值时每格都标号，否则每 `RULER_STEP` 格标一次。
@@ -34,11 +36,11 @@ const FONT_STACK = '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'
  * `14` 这个取值使 **29×29 走逐格、52×52 及以上走每 5 格**
  * （可用 `.pindou-devtools/probe-ruler.js` 复现该分档表）。
  */
-const RULER_DENSE_MIN_CELL = 14;
+export const RULER_DENSE_MIN_CELL = 14;
 /** 稀疏模式下的标注间隔（格）。每 5 格标一次，配合每 10 格的加粗参考线即可数清任何位置 */
-const RULER_STEP = 5;
+export const RULER_STEP = 5;
 /** 加粗参考线的间隔（格）。十进制，与人类数数习惯一致 */
-const RULER_MAJOR_STEP = 10;
+export const RULER_MAJOR_STEP = 10;
 
 /**
  * 依格子尺寸决定标尺的绘制参数。**纯函数**，便于测试直接复用（不重算一遍规则）。
@@ -48,7 +50,7 @@ const RULER_MAJOR_STEP = 10;
  * @returns {{step:number, majorStep:number, dense:boolean, fontSize:number, margin:number}}
  *          `step` 为标注间隔（1 = 逐格）；`margin` 为边距外扩宽度（含线与文字）
  */
-function rulerMetrics(cellW, cellH) {
+export function rulerMetrics(cellW, cellH) {
   const minCell = Math.min(cellW, cellH);
   const dense = minCell >= RULER_DENSE_MIN_CELL;
   const step = dense ? 1 : RULER_STEP;
@@ -85,7 +87,7 @@ function rulerMetrics(cellW, cellH) {
  * @param {string} opts.lineColor 参考线颜色
  * @param {string} opts.textColor 脚注文字颜色
  */
-function drawRuler(ctx, opts) {
+export function drawRuler(ctx, opts) {
   const {
     x, y, cellW, cellH, rows, cols, margin, step, majorStep, fontSize,
     lineColor, textColor,
@@ -142,7 +144,7 @@ function drawRuler(ctx, opts) {
  * @param {{r:number,g:number,b:number}} cell 已映射的色板颜色
  * @returns {string} `'#000000'` 或 `'#FFFFFF'`
  */
-function pickTextColor(cell) {
+export function pickTextColor(cell) {
   // Rec.601 亮度权重
   const lum = (cell.r * 0.299 + cell.g * 0.587 + cell.b * 0.114) / 255;
   return lum > 0.5 ? '#000000' : '#FFFFFF';
@@ -176,7 +178,7 @@ function pickTextColor(cell) {
  * @param {number|null} opts.textMinCell 画色号所需的最小格边；`null` = 总是画
  * @param {boolean} opts.roundFontSize 字号是否取整
  */
-function drawGrid(ctx, grid, opts) {
+export function drawGrid(ctx, grid, opts) {
   const { x, y, cellW, cellH, gridLineColor, hatchEmptyCells, textMinCell, roundFontSize } = opts;
   const rows = grid.length;
   const cols = grid[0].length;

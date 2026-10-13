@@ -1,3 +1,9 @@
+import { selectionBox, viewerHint, viewerHint2, viewerHint4, viewerWrapper } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { generateGrid } from '../pipeline/grid.js';
+import { clamp } from '../ui/a11y.js';
+import { computeImageRect, getImageCoords, scheduleViewerRedraw } from './viewer.js';
+
 // ============================================================
 // js/viewer/selection.js — 矩形选框（拖拽 / 手柄 / 键盘联动）
 // ============================================================
@@ -13,13 +19,14 @@
 //    这是既有的跨领域耦合（REFACTOR §3.3），搬迁时原样保留，
 //    待编排层（main.js）建立后再考虑收拢，**不要在这里顺手改**。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 3. 矩形选框
 // ============================================================
 
-function updateSelectionBox() {
+export function updateSelectionBox() {
   // 确保选框可见（iOS Safari 可能因渲染延迟导致 class 不生效）
   selectionBox.classList.add('visible');
 

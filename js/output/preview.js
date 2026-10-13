@@ -1,3 +1,8 @@
+import { $, previewCanvas, previewInfo, previewSection } from '../core/dom.js';
+import { state } from '../core/state.js';
+import { exportScaleNote } from './export.js';
+import { drawGrid, drawRuler, rulerMetrics } from '../pipeline/render.js';
+
 // ============================================================
 // js/output/preview.js — 图纸预览渲染
 // ============================================================
@@ -7,7 +12,8 @@
 //    标尺边距是格子尺寸的函数，用"缩放前的边距"估算会溢出容器（实测 1~7px）。
 //    MIN_SCALE=0.35 是既有产品决策（极窄屏宁可横向滚动），不是缺陷。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // 它调用的 drawGrid / drawRuler / rulerMetrics 来自 js/pipeline/render.js。
 // ============================================================
 // ============================================================
@@ -36,7 +42,7 @@
  * @param {boolean} useRuler 是否开标尺
  * @returns {{drawW:number, drawH:number}} 适配后的网格绘制尺寸
  */
-function fitPreviewGrid(baseW, baseH, cols, rows, maxW, padding, useRuler) {
+export function fitPreviewGrid(baseW, baseH, cols, rows, maxW, padding, useRuler) {
   const MIN_SCALE = 0.35;
   const gutterOf = (w, h) => (useRuler ? rulerMetrics(w / cols, h / rows).margin : 0);
   const totalW = (w, h) => w + gutterOf(w, h) + padding * 2;
@@ -68,7 +74,7 @@ function fitPreviewGrid(baseW, baseH, cols, rows, maxW, padding, useRuler) {
   return { drawW: drawW2, drawH: drawH2 };
 }
 
-function renderPreview() {
+export function renderPreview() {
   if (!state.gridData) return;
   previewSection.hidden = false;
 

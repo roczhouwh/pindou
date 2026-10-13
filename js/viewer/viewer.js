@@ -1,3 +1,8 @@
+import { controlsSection, downloadBtn, isTouchDevice, previewSection, selectionBox, statsSection, uploadSection, viewerCanvas, viewerHint, viewerHint2, viewerHint3, viewerHint4, viewerSection, viewerWrapper } from '../core/dom.js';
+import { state, viewerCtx } from '../core/state.js';
+import { generateGrid } from '../pipeline/grid.js';
+import { updateSelectionBox } from './selection.js';
+
 // ============================================================
 // js/viewer/viewer.js — 图片查看器（画布渲染与坐标换算）
 // ============================================================
@@ -13,7 +18,8 @@
 // ⚠️ `resizeViewerCanvas()` 的零尺寸 rAF 重试不要删：
 //    iOS 14 在 hidden→visible 切换后 getBoundingClientRect 可能返回 0。
 //
-// 当前阶段仍用裸 <script> src 加载（步骤 0 未做），故本文件不使用 import/export。
+// 本文件是原生 ES module（步骤 0 已完成）：依赖由上方 import 显式声明，
+// 不再靠"共享全局词法环境"。
 // ============================================================
 // ============================================================
 // 2. 图片查看器
@@ -43,7 +49,7 @@
  * ⚠️ 另：本函数**不读** `state.image`，也不做 `state.imageW/imageH` 的有效性检查，
  * 调用方须自行保证（`renderViewer` 已在入口判空）。
  */
-function computeImageRect(w, h) {
+export function computeImageRect(w, h) {
   // contain 适配：图片按原比例完整放入画布
   const imgAspect = state.imageW / state.imageH;
   const canvasAspect = w / h;
@@ -65,7 +71,7 @@ function computeImageRect(w, h) {
   return { imgX: cx - scaledW / 2, imgY: cy - scaledH / 2, scaledW, scaledH };
 }
 
-function showViewer() {
+export function showViewer() {
   uploadSection.hidden = true;
   viewerSection.hidden = false;
   controlsSection.hidden = false;
@@ -93,7 +99,7 @@ function showViewer() {
   });
 }
 
-function resizeViewerCanvas() {
+export function resizeViewerCanvas() {
   const rect = viewerWrapper.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) {
     // iOS Safari 布局未就绪，重试
@@ -106,7 +112,7 @@ function resizeViewerCanvas() {
   viewerCanvas.style.height = rect.height + 'px';
 }
 
-function renderViewer() {
+export function renderViewer() {
   if (!state.image) return;
   // ⚠️ 宽高来源是 viewerCanvas（不是 getBoundingClientRect）—— 见 computeImageRect 的说明
   const w = viewerCanvas.width;
@@ -136,7 +142,7 @@ function renderViewer() {
   }
 }
 
-function getImageCoords(clientX, clientY) {
+export function getImageCoords(clientX, clientY) {
   const rect = viewerWrapper.getBoundingClientRect();
   const mx = clientX - rect.left;
   const my = clientY - rect.top;
@@ -165,7 +171,7 @@ function getImageCoords(clientX, clientY) {
  * 若已有排队的重绘则直接复用，不再重复排队。
  */
 let viewerRedrawPending = false;
-function scheduleViewerRedraw() {
+export function scheduleViewerRedraw() {
   if (viewerRedrawPending) return;
   viewerRedrawPending = true;
   requestAnimationFrame(() => {

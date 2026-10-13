@@ -32,7 +32,46 @@
 //
 // ⚠️ 因此**不要**往本文件里堆新功能（防复发规则 1）：按特性域归位到 js/ 下。
 //    本文件存在的意义是：步骤 6 收拢跨领域调用时有一个明确的落点，
-//    以及步骤 0（ESM）后成为模块图的入口（`import './core/dom.js'` 等）。
+//    以及步骤 0（ESM）后成为模块图的入口。
 //
-// 加载顺序见 index.html（**顺序即依赖**，错了会抛 TDZ）。
+// ⚠️⚠️ **下面这组 import 是页面能否工作的关键，不是装饰**。
+//
+//   ESM 的模块图是**从入口的 import 语句出发**解析的 —— 没有被 import 到的
+//   文件**根本不会被浏览器请求**。本文件原先只有注释、一条 import 都没有，
+//   于是 index.html 虽然写着 `<script type="module" src="js/main.js">`，
+//   浏览器却只取到 main.js 一个文件，**其余 18 个模块全都没加载** ——
+//   页面表现为"完全没反应"（而 jsdom 脚手架用的是真实 `import()` 整图，
+//   所以**测试全绿也发现不了**，必须靠真实浏览器验证）。
+//
+//   实测证据：改成单入口后，Chrome 网络层只看到
+//   `index.html / style.css / js/main.js / manifest.json / icon-*.png`，
+//   一个 js/ 模块都没有。
+//
+//   **新增模块时必须在这里补一条 import**（若它不被其它模块引用），
+//   否则那个文件永远不会被加载。`probe-verify-entry-chain.js` 守护这条。
+//
+// 顺序说明：ESM 由解析器做拓扑排序，**这里的书写顺序不影响正确性**；
+// 下面按 REFACTOR §4.2 的领域层次排列，纯粹为了可读性。
 // ============================================================
+
+// 入口的副作用就是"把整张模块图拉起来"。
+// 每个模块在被求值时都会完成自己的装配（DOM 引用、事件监听、状态初始化），
+// 所以这里**不需要**再写任何编排代码 —— 见上方「本文件当前不承载逻辑」。
+import './core/dom.js';
+import './core/state.js';
+import './input/camera.js';
+import './input/upload.js';
+import './pipeline/render.js';
+import './pipeline/simplify.js';
+import './pipeline/grid.js';
+import './viewer/viewer.js';
+import './viewer/selection.js';
+import './viewer/panzoom.js';
+import './output/preview.js';
+import './output/stats.js';
+import './output/export.js';
+import './ui/a11y.js';
+import './ui/grid-select.js';
+import './ui/loading.js';
+import './ui/install.js';
+
