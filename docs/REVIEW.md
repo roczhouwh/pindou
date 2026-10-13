@@ -1,5 +1,23 @@
 # 拼豆图纸生成器 — 代码审查报告
 
+> ## 📍 本文档的职责边界
+>
+> **本文档 = 一次代码审查的完整归档**（37 项问题，**已全部处理**）。
+> 它回答的是「**当时发现了什么问题、怎么定性、怎么验证的**」。
+>
+> | 想看什么 | 去哪里 |
+> |---|---|
+> | **要做什么功能 / 排期 / 进度 / 下一步** | **[PLAN.md](PLAN.md)** ← 唯一真源 |
+> | **代码放在哪里 / 结构对策 / 防复发规则** | [REFACTOR.md](REFACTOR.md) |
+> | 用户怎么用、怎么跑起来 | [../README.md](../README.md) |
+> | 面向 AI 的技术说明（模块、数据流、约束） | [../CLAUDE.md](../CLAUDE.md) |
+>
+> ⚠️ **本文档不记录进度与排期**。文中「本轮 / 第一批 / 第二批」等字样是**写作时的叙述**，
+> 不代表现状。**要现状请看 [PLAN.md](PLAN.md) §一 与 §5.2。**
+>
+> **📌 最关键的一节是 [§五「明确核实"没问题"的项」](#五-明确核实没问题的项)** ——
+> **改代码前先读它**，避免为"修问题"而改坏**本来正确**的代码。
+
 > **审查范围**：`app.js`（1729 行）、`color-palette.js`（254 行）、`index.html`（213 行）、
 > `style.css`（796 行）、`sw.js`（150 行）、`manifest.json`（34 行）—— 全仓库覆盖。
 > **审查方式**：逐行通读 + 脚本实测复算 + **真实 DOM 行为测试**。**每条结论标注了核实方式**。
@@ -12,7 +30,7 @@
 > **不要按它去定位当前代码** —— 请按函数名/符号名定位。
 > 本轮新增的锚点一律使用符号名（见 §6.5 的教训）。
 >
-> 配套文档：[PLAN.md](PLAN.md)（功能路线）、[REFACTOR.md](REFACTOR.md)（结构对策）、[CLAUDE.md](CLAUDE.md)
+> 配套文档：[PLAN.md](PLAN.md)（**功能与进度**）、[REFACTOR.md](REFACTOR.md)（结构对策）、[../CLAUDE.md](../CLAUDE.md)
 
 ---
 
@@ -173,12 +191,12 @@ m12（网格尺寸重置为 29）、m9（重复注释块）、新增全局 `#toa
 > 并用**真实像素缓冲**实现 canvas 2D 上下文），断言一律落在**用户可感知的输出**上。
 > 这套脚手架共 **106 条断言、11 个套件，全绿**。
 >
-> **📌 后续扩容**：建立后已扩过四轮 —— ① REFACTOR §七 复核加了 2 个探针；
+> **📌 后续扩容**：建立后已扩过多轮 —— ① REFACTOR §七 复核加了 2 个探针；
 > ② §7.1 步骤 1（拆猴补丁）加了 `test-patch-removal.js` 并启用 `probe-esm-cost.js`；
 > ③ §7.1 步骤 2 / 3b / 4 各加一个套件（`test-compute-image-rect` /
 > `test-dragstart-semantics` / `test-draw-grid`）；④ PLAN §3.1 加 `test-simplify.js`、
 > **PLAN §3.5 加 `test-ruler.js`**。
-> **当前为 20 套件 / 188 条断言**（见 §九 套件清单）。
+> **📌 此处的"20 套件 / 188 断言"是那一轮的值；现状以 [PLAN.md](PLAN.md) §6.6 为准。**
 
 ### 🔬 本轮最重要的成果：C2 从"拦截"变成"根治"
 
@@ -394,7 +412,7 @@ REVIEW 原文说 `gridData` 与 `rawGridData` 共享**行数组引用**。实际
 
 ### C1. 简化强度在重新上传 / 重置后**未被清除**，静默改变新图输出 【已实测复现】【✅ 已修复】
 
-**位置**：[app.js:218-227](app.js#L218-L227)（`handleFile`）、[app.js:1241-1257](app.js#L1241-L1257)（`#resetBtn`）、[app.js:760](app.js#L760)
+**位置**：`app.js:218-227`（`handleFile`）、`app.js:1241-1257`（`#resetBtn`）、`app.js:760`
 
 **事实**：`handleFile` 重置了 `selection`/`zoom`/`panX`/`panY`/`gridData`/`colorCounts`，
 **但没有重置 `state.simplify`，也没有重置滑块的 DOM 值**。`#resetBtn` 同样不清。
@@ -425,7 +443,7 @@ REVIEW 原文说 `gridData` 与 `rawGridData` 共享**行数组引用**。实际
 
 ### C2. 78×78 / 104×104 导出在 iOS 上必然失效 【已实测，尺寸复算吻合】【✅ 已根治：自适应倍率，四档均可导出】
 
-**位置**：[app.js:1202](app.js#L1202)（`downloadPNG`）、[app.js:1048](app.js#L1048)（`sharePNG`）、[app.js:1099-1103](app.js#L1099-L1103)
+**位置**：`app.js:1202`（`downloadPNG`）、`app.js:1048`（`sharePNG`）、`app.js:1099-1103`
 
 **事实**：iOS Safari 的画布上限为 **16.78MP（4096²）**。本项目导出画布（dpr=2）实测尺寸：
 
@@ -438,13 +456,13 @@ REVIEW 原文说 `gridData` 与 `rawGridData` 共享**行数组引用**。实际
 
 **双重失效路径**：
 
-1. **[app.js:1202-1203](app.js#L1202-L1203) 未对 `blob` 判空** —— 超限时 `toBlob` 回调收到 `null`，
+1. **`app.js:1202-1203` 未对 `blob` 判空** —— 超限时 `toBlob` 回调收到 `null`，
    `URL.createObjectURL(null)` **直接抛异常**。用户点击下载：**毫无反应**。
-2. **[app.js:1208](app.js#L1208) 的 iOS 分支在异步回调内调用 `window.open`** ——
+2. **`app.js:1208` 的 iOS 分支在异步回调内调用 `window.open`** ——
    `toBlob` 回调已脱离用户手势调用栈，**iOS 弹窗拦截器会阻止它**。
    即使用户用 52×52，iOS 上也可能拿到空白。
 
-**对比**：[app.js:1049](app.js#L1049) 的 `sharePNG` **有**判空（`if (!blob) return;`），
+**对比**：`app.js:1049` 的 `sharePNG` **有**判空（`if (!blob) return;`），
 但失败时**静默无提示**。两条路径共用同一个超限画布（都调 `renderDownloadCanvas()`），
 所以**分享在 78/104 档同样失效**。
 
@@ -460,7 +478,7 @@ REVIEW 原文说 `gridData` 与 `rawGridData` 共享**行数组引用**。实际
 
 ### C3. 键盘用户**完全无法**使用核心功能 【已实测：全仓库 0 个键盘监听】【✅ 已修复：补方向键通路】
 
-**位置**：[index.html:68-84](index.html#L68-L84)（viewer + 8 个手柄）、[style.css:130-141](style.css#L130-L141)
+**位置**：[index.html:68-84](../index.html#L68-L84)（viewer + 8 个手柄）、[style.css:130-141](../style.css#L130-L141)
 
 **事实**（全仓库 grep 实测）：
 
@@ -483,14 +501,14 @@ REVIEW 原文说 `gridData` 与 `rawGridData` 共享**行数组引用**。实际
 
 ### M1. 统计表顺序随滑块变化 【已实测确认】【✅ 已修复】
 
-**位置**：[app.js:757](app.js#L757)（不排序）vs [app.js:787](app.js#L787)（降序排序）
+**位置**：`app.js:757`（不排序）vs `app.js:787`（降序排序）
 
 ```
 simplify = 0  →  colorCounts = rawColorCounts      ← Array.from(...)，无 .sort() → 插入序
 simplify > 0  →  colorCounts = rebuildColorCounts() ← 有 .sort((a,b)=>b.count-a.count) → 降序
 ```
 
-`renderStats`（[1000-1023](app.js#L1000-L1023)）直接遍历 `colorCounts`，**所以表格顺序会变**。
+`renderStats`（`app.js:1000-1023`）直接遍历 `colorCounts`，**所以表格顺序会变**。
 
 **后果**：用户把滑块从 0 拖开再拖回 0，「颜色用量统计」表的行序**自己变了**。
 且 CLAUDE.md 把 `colorCounts` 描述为"按数量降序的颜色统计数组" —— **只在 simplify>0 时成立**，
@@ -502,7 +520,7 @@ simplify > 0  →  colorCounts = rebuildColorCounts() ← 有 .sort((a,b)=>b.cou
 
 ### M2. 双指平移只生效一帧 【✅ 已修复，且已由静态推断升级为**算术证明**】
 
-**位置**：[app.js:565-569](app.js#L565-L569)
+**位置**：`app.js:565-569`
 
 ```js
 const dx = center.x - state.lastTouchCenter.x;   // 单帧增量
@@ -510,9 +528,9 @@ state.panX = state.panStart.x + dx;              // 却叠加到"起始值"上
 state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 center 算增量
 ```
 
-**分析**：`panStart` 在 `touchstart` 时固定（[544](app.js#L544)），
+**分析**：`panStart` 在 `touchstart` 时固定（`app.js:544`），
 但每帧的 `dx` 是**相对上一帧的增量**。于是 `panX` 恒等于"起始值 + 最后一帧的微小位移"，
-**位移不累积**。对比 [489-490](app.js#L489-L490) 的鼠标平移用的是"起点 + 当前总位移"，语义不一致。
+**位移不累积**。对比 `app.js:489-490` 的鼠标平移用的是"起点 + 当前总位移"，语义不一致。
 
 **后果**：双指平移几乎不动（只跟随抖动）。
 
@@ -525,7 +543,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M3. 相机流未在页面隐藏 / 卸载时释放 【已实测：无相关监听】【✅ 已修复】
 
-**位置**：[app.js:142-147](app.js#L142-L147)（`getUserMedia`）、[app.js:176-183](app.js#L176-L183)（`closeCamera`）
+**位置**：`app.js:142-147`（`getUserMedia`）、`app.js:176-183`（`closeCamera`）
 
 **事实**：`cameraStream` 仅在用户点「✕」或拍照成功后被停止。
 全仓库**无** `visibilitychange` / `pagehide` / `beforeunload` 监听（已实测 grep 无命中）。
@@ -539,7 +557,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M4. 两个可见 canvas 无任何无障碍名称 【已实测】【✅ 已修复】
 
-**位置**：[index.html:69](index.html#L69)（`viewerCanvas`）、[index.html:136](index.html#L136)（`previewCanvas`）
+**位置**：[index.html:69](../index.html#L69)（`viewerCanvas`）、[index.html:136](../index.html#L136)（`previewCanvas`）
 
 **事实**：二者均无 `aria-label`、无 `role`、无 fallback 内容。
 
@@ -554,7 +572,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M5. 生成过程与完成状态对读屏用户静默 【已实测：0 个 aria-live】【✅ 已修复】
 
-**位置**：[app.js:1267-1274](app.js#L1267-L1274)（`showLoading`/`hideLoading`）、[index.html:120](index.html#L120)（下载按钮）
+**位置**：`app.js:1267-1274`（`showLoading`/`hideLoading`）、[index.html:120](../index.html#L120)（下载按钮）
 
 **事实**：
 - 全仓库 `aria-live` 数 = **0**
@@ -571,7 +589,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M6. `sw.js` 应用壳存在**两套不同步的缓存副本** 【已实测确认】【✅ 已修复 + 新增行为测试守护】
 
-**位置**：[sw.js:15](sw.js#L15)（`'./'`）、[sw.js:35](sw.js#L35)（`APP_SHELL_URL`）、[sw.js:94](sw.js#L94)、[sw.js:98](sw.js#L98)
+**位置**：[sw.js:15](../sw.js#L15)（`'./'`）、[sw.js:35](../sw.js#L35)（`APP_SHELL_URL`）、[sw.js:94](../sw.js#L94)、[sw.js:98](../sw.js#L98)
 
 **实测**：
 
@@ -584,7 +602,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 **精确结论（比初判更窄，需如实说明）**：由于 `manifest.json` 的 `start_url` 是 `"."` → `/`，
 **根路径 `/` 本身已在 `ASSET_PATHS` 中被预缓存**，所以**离线打开 `/` 不会失败**。
 
-**真正成立的缺陷**是：导航时的**再验证写入（[94](sw.js#L94)）只更新键 B**。
+**真正成立的缺陷**是：导航时的**再验证写入（[94](../sw.js#L94)）只更新键 B**。
 于是键 A（`/`）**永远停留在 install 那一刻的版本**。返回用户离线访问 `/` 时，
 拿到的可能是**比 `/index.html` 更旧的 HTML** —— 缓存不一致，而非离线不可用。
 
@@ -595,7 +613,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M7. `cache.addAll` 全有或全无，单点失败导致离线能力整体失效 【已实测】【✅ 已修复】
 
-**位置**：[sw.js:38-46](sw.js#L38-L46)
+**位置**：[sw.js:38-46](../sw.js#L38-L46)
 
 **事实**：`cache.addAll([...ASSETS])` 是**原子操作** —— 8 个资源中**任一**失败
 （网络抖动、`/` 返回重定向导致 `response.ok === false`、图标 404），
@@ -608,7 +626,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M8. 上传 UI 的判据在 CSS 与 JS 之间不一致 【已实测】【✅ 已修复】
 
-**位置**：[style.css:710-712](style.css#L710-L712)（`@media (pointer: coarse)`）vs [app.js:46](app.js#L46)（`navigator.maxTouchPoints > 0`）
+**位置**：[style.css:710-712](../style.css#L710-L712)（`@media (pointer: coarse)`）vs `app.js:46`（`navigator.maxTouchPoints > 0`）
 
 **事实**：CSS 用 `pointer: coarse`（主指针为粗指针），JS 用 `maxTouchPoints > 0`（存在任意触摸点），
 **两套判据不等价**。
@@ -626,7 +644,7 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 
 ### M9. 极端宽高比下格子被显著拉伸（最大偏差 45%）【已实测穷举】【✅ 已修复：如实提示】
 
-**位置**：[app.js:681](app.js#L681)、[app.js:688](app.js#L688)（`Math.round`）
+**位置**：`app.js:681`、`app.js:688`（`Math.round`）
 
 **更正说明**：我第一轮报告"宽高比误差 ≤3.5%"，**该结论过于乐观**。
 3.5% 只是在**常见比例**（接近 1）下的量化误差。完整规律是：
@@ -646,21 +664,21 @@ state.lastTouchCenter = center;                  // 下一帧 dx 又从新的 ce
 **性质澄清（重要）**：这**不是逻辑错误**，而是**量化极限** —— 当内容只占 1 格时，
 `Math.round` 的 ±0.5 格就是 ±50% 相对偏差。常见照片（比例接近 1）偏差 <3.5%，可接受。
 
-**⚠️ 同时更正对方（深审）提出的机制**：其称偏差源于 [682](app.js#L682)/[689](app.js#L689)
+**⚠️ 同时更正对方（深审）提出的机制**：其称偏差源于 `app.js:682`/`app.js:689`
 的 `Math.min(gh, contentH)` 夹取。**该机制不成立** —— 我穷举 113,400 组，**夹取触发 0 次**：
 在 `selAspect >= gridAspect` 分支里 `gw/selAspect <= gw/gridAspect = gh`，故 `contentH <= gh` 恒成立，
 `Math.min` 在数学上不可达。**对方结论（存在大幅形变）正确，但归因错误。**
 
 **是否要修**：取决于产品意图。若允许用户框选极细长区域（如 20:1），
 当前会明显拉伸 → 建议 UI 提示"当前选框比例过于极端"。
-另 [681](app.js#L681)/[688](app.js#L688) 用 `Math.round`、[684](app.js#L684)/[690](app.js#L690) 用
+另 `app.js:681`/`app.js:688` 用 `Math.round`、`app.js:684`/`app.js:690` 用
 `Math.floor`，取整方式不一致（Minor，奇数余量时上下留白差 1 格，肉眼不可见）。
 
 ---
 
 ### M10. 选框越出图片边界时，采样裁剪尺寸**变为负数** 【已实测，修正第一轮结论】【✅ 已修复】
 
-**位置**：[app.js:719-724](app.js#L719-L724)
+**位置**：`app.js:719-724`
 
 ```js
 const imageData = offCtx.getImageData(
@@ -673,7 +691,7 @@ const imageData = offCtx.getImageData(
 
 **防御不对称**：`Math.max(0, ·)` 只保证 `sx`/`sy` 非负，
 **没有保证 `sw`/`sh` 非负**。而 `selX`/`selW` 由 `Math.floor` 得来、**无任何夹取**
-（[666-669](app.js#L666-L669)），当 `selX + selW > sampleW` 时 `sampleW - srcX` 可为负。
+（`app.js:666-669`），当 `selX + selW > sampleW` 时 `sampleW - srcX` 可为负。
 
 **实测**（3000×2000 图降采样至 2048×1365，`selection = {x:0.6, y:0, w:0.5, h:1}`）：
 
@@ -690,7 +708,7 @@ selX + selW = 2252 > sampleW = 2048
 
 **后果（两种可能，均为 bug）**：
 - **(a)** `getImageData` 抛 `IndexSizeError` → `generateGrid` **无 try/catch** →
-  且 [1277-1289](app.js#L1277-L1289) 的 rAF 包装**也无 try/catch**，
+  且 `app.js:1277-1289` 的 rAF 包装**也无 try/catch**，
   `hideLoading` 挂在 `setTimeout` 上会被跳过 → **loading 遮罩永久卡死**；
 - **(b)** 不抛 → 采到左侧完全无关的像素 → **右边缘静默错色**。
 
@@ -705,7 +723,7 @@ selX + selW = 2252 > sampleW = 2048
 
 ### M11. 🔍 采样窗口"半格 + 留缝"，**54.7% 的像素从未被采样** 【已实测，本轮最重要】【✅ 已修复】
 
-**位置**：[app.js:716-717](app.js#L716-L717)
+**位置**：`app.js:716-717`
 
 ```js
 const winW = Math.max(2, Math.floor(cellSampW * 0.5));   // 窗口边长只有半格
@@ -768,9 +786,9 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | m8 | `video` 元素的 canvas 每次拍照新建未释放 | app.js:161 | 单次 create 影响小，但连续拍照会累积 |
 | m9 | 重复注释块 | app.js:633-640 | "5. 网格生成 + 色板映射"标题写了两遍 |
 | m10 | `applyCustom` 校验失败时**静默返回**，无任何提示 | app.js:613 | 用户输入 200 后点「应用」毫无反应，不知为何。对照 `handleFile` 的 `showError` 有提示，此处不一致 |
-| m11 | 降采样注释**夸大**了保证 | app.js:650 | 注释称"颜色精度不受影响"，但 [663](app.js#L663) 的 `drawImage` 降采样会做平滑平均，实际是"影响很小"而非"不受影响"。**属注释准确性问题，非代码 bug** —— 但按本仓库"注释解释为什么"的水准，值得改准确 |
+| m11 | 降采样注释**夸大**了保证 | app.js:650 | 注释称"颜色精度不受影响"，但 `app.js:663` 的 `drawImage` 降采样会做平滑平均，实际是"影响很小"而非"不受影响"。**属注释准确性问题，非代码 bug** —— 但按本仓库"注释解释为什么"的水准，值得改准确 |
 | m12 | `gridW`/`gridH` 重新上传后**保持上次值** | app.js:218-227 | 未在 `handleFile` 中重置（与 C1 同源，但网格尺寸回归默认更可能是用户预期行为，故列为 Minor 而非 Critical） |
-| m13 | `applySimplify` [805](app.js#L805) 早返回**不更新 state** | app.js:805 | `if (maxDistSq <= 0) return;` 在滑块 0-100 下**不可达**（`threshold<=0` 已在 [796](app.js#L796) 返回）。若将来放开小数/负值，它会静默返回、`state.gridData` 留旧值 → 与新的 `simplify` 不一致。当前属死代码 |
+| m13 | `applySimplify` `app.js:805` 早返回**不更新 state** | app.js:805 | `if (maxDistSq <= 0) return;` 在滑块 0-100 下**不可达**（`threshold<=0` 已在 `app.js:796` 返回）。若将来放开小数/负值，它会静默返回、`state.gridData` 留旧值 → 与新的 `simplify` 不一致。当前属死代码 |
 | m14 | `Math.round` 与 `Math.floor` 取整方式混用 | app.js:681/688 vs 684/690 | 奇数余量时上下留白差 1 格（不可见）。属一致性债 |
 
 ---
@@ -785,8 +803,8 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | n4 | SW 注册的 `.catch(() => {})` 完全静默，调试困难 | index.html:185 |
 | n5 | `skipWaiting()` 写在 `waitUntil` 之外 —— **不是 bug**（同步调用无需包裹），仅注释易误导 | sw.js:45 |
 | n6 | 装饰性 `<svg>` 未加 `aria-hidden="true"` | index.html 多处 |
-| n7 | **`gridData` 与 `rawGridData` 共享同一数组引用**（非拷贝） | app.js:763/797 | 当前无 bug（[811](app.js#L811) 每次从 raw 深拷贝）。但 PLAN §3.4 计划做**单元格编辑**，一旦就地改 `gridData` 会**静默污染 raw** → 滑块回 0 时恢复出"被编辑过"的原始数据且不可逆。**做单元格编辑前必须先拆这个引用** |
-| n8 | `findNearestColor` 对 `NaN` **静默退化为 `A1`** | color-palette.js:243-253 | 实测 `{r:NaN,g:0,b:0}` → 返回 `A1`（浅黄）：所有距离为 `NaN`，`NaN < Infinity` 恒 false，`best` 保持初值。**当前调用链不会触发**（[742](app.js#L742) 传入 `Math.round(r/count)`，`count>=1` 由 [737](app.js#L737) 保证），属沉默失败模式 |
+| n7 | **`gridData` 与 `rawGridData` 共享同一数组引用**（非拷贝） | app.js:763/797 | 当前无 bug（`app.js:811` 每次从 raw 深拷贝）。但 PLAN §3.4 计划做**单元格编辑**，一旦就地改 `gridData` 会**静默污染 raw** → 滑块回 0 时恢复出"被编辑过"的原始数据且不可逆。**做单元格编辑前必须先拆这个引用** |
+| n8 | `findNearestColor` 对 `NaN` **静默退化为 `A1`** | color-palette.js:243-253 | 实测 `{r:NaN,g:0,b:0}` → 返回 `A1`（浅黄）：所有距离为 `NaN`，`NaN < Infinity` 恒 false，`best` 保持初值。**当前调用链不会触发**（`app.js:742` 传入 `Math.round(r/count)`，`count>=1` 由 `app.js:737` 保证），属沉默失败模式 |
 | n9 | `offCtx` 未设 `imageSmoothingQuality`（默认 `'low'`） | app.js:660 | 大图降到 2048 的插值损失会与 M11 叠加，未量化 |
 
 ---
@@ -798,20 +816,20 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | 检查项 | 核实方式 | 结论 |
 |---|---|---|
 | **`contain` 适配数学**（是否保比例、是否居中、是否越界） | 脚本实测 7 组 + **穷举 113,400 组** | ⚠️ **需分情况**：<br>• **不越界、居中对称、无逻辑错误** —— ✅ 成立<br>• **夹取（`Math.min`）经证明永不触发** —— 分支条件使其数学上不可达，穷举 113,400 组触发 **0 次**，属纯防御代码<br>• **但宽高比偏差在极端比例下可达 45%** —— 见下方 **M9**，我最初的"≤3.5%"结论**过于乐观，已修正** |
-| **全透明格处理**（是否会除以 0） | 代码核对 [app.js:737-739](app.js#L737-L739) | ✅ 有 `count === 0` 守卫，正确留白为 `null`。复测 `alpha=127`→`null`、`alpha=128`→取色，边界一致 |
+| **全透明格处理**（是否会除以 0） | 代码核对 `app.js:737-739` | ✅ 有 `count === 0` 守卫，正确留白为 `null`。复测 `alpha=127`→`null`、`alpha=128`→取色，边界一致 |
 | **`getImageData` 零尺寸崩溃**（近零选框） | 脚本实测 3 组退化用例 | ⚠️ **我最初的结论不完整** —— `Math.max(2,...)` 确实挡住了 `w=0`/`h=0`，但**没挡住"选框越出图片右/下边界"**。见下方 **M10**（已实测 116 格/帧出现负裁剪尺寸） |
 | **`applySimplify` 合并算法**（传递闭包 / 循环 / 合并到不存在的色） | 脚本实测 4 档阈值 | ✅ **正确**。无 undefined 单元格、闭包正确解析、频率决胜生效 |
 | **色板数据完整性** | 脚本实测 | ✅ 221 色、**无重复 hex、无重复名称** |
 | **`sw.js` 预缓存清单** | 逐条 `Test-Path` + 读图尺寸 | ✅ 8/8 路径存在，图标尺寸与 manifest 声明一致 |
-| **`sw.js` 是否越权拦截同源其它项目** | 代码核对 [80-104](sw.js#L80-L104) | ✅ 设计原则与代码**相符**（同源 + GET + 白名单 + 导航走网络优先） |
+| **`sw.js` 是否越权拦截同源其它项目** | 代码核对 [80-104](../sw.js#L80-L104) | ✅ 设计原则与代码**相符**（同源 + GET + 白名单 + 导航走网络优先） |
 | **`APP_SIGNATURE` 校验** | grep 校验 | ✅ 有效，不会误存他站首页 |
-| **旧缓存清理** | 代码核对 [sw.js:49-63](sw.js#L49-L63) | ✅ 正确，与 `CACHE_NAME` 版本号配套 |
+| **旧缓存清理** | 代码核对 [sw.js:49-63](../sw.js#L49-L63) | ✅ 正确，与 `CACHE_NAME` 版本号配套 |
 | **`[hidden] { display:none !important }`** | 代码核对 | ✅ **必要且正确** —— 挡住了 `.camera-overlay{display:flex}` 冲突。**不要删这条** |
 | **iOS 14.4 兼容注释与代码是否对应** | 三方核对 | ✅ 注释描述与 `.visible` class 用法一致 |
 | **4 个 canvas 是否都有用途** | 代码核对 | ✅ 无闲置 canvas |
-| **`findNearestColor` 是否确定可复现**（影响色号稳定性） | 脚本实测 24,310 组 | ✅ **确定**。用严格 `<`（[color-palette.js:248](color-palette.js#L248)），精确等距时取**先出现者**，同输入恒同输出。PLAN §3.1 的"跳变"是**采样值抖动**所致，**不是**匹配函数本身不确定 |
-| **网格尺寸校验是否与文档一致** | 三方核对 | ✅ HTML `min/max`（[106/108](index.html#L106-L108)）与 JS 守卫（[610-611](app.js#L610-L611)）**一致**，均为 `15~104`，与 CLAUDE.md 描述相符 |
-| **采样平均色是否有 off-by-one / 除数错误** | 代码核对 [727-735](app.js#L727-L735) | ✅ 循环 `i<data.length; i+=4` 覆盖全部像素；除数用 `count`（实际有效像素数）**而非固定窗面积** —— 这是**正确**的设计，恰好避免半透明边缘把均值拉暗 |
+| **`findNearestColor` 是否确定可复现**（影响色号稳定性） | 脚本实测 24,310 组 | ✅ **确定**。用严格 `<`（[color-palette.js:248](../color-palette.js#L248)），精确等距时取**先出现者**，同输入恒同输出。PLAN §3.1 的"跳变"是**采样值抖动**所致，**不是**匹配函数本身不确定 |
+| **网格尺寸校验是否与文档一致** | 三方核对 | ✅ HTML `min/max`（[106/108](../index.html#L106-L108)）与 JS 守卫（`app.js:610-611`）**一致**，均为 `15~104`，与 CLAUDE.md 描述相符 |
+| **采样平均色是否有 off-by-one / 除数错误** | 代码核对 `app.js:727-735` | ✅ 循环 `i<data.length; i+=4` 覆盖全部像素；除数用 `count`（实际有效像素数）**而非固定窗面积** —— 这是**正确**的设计，恰好避免半透明边缘把均值拉暗 |
 | **边界网格 × 极端选框是否越界** | 脚本实测 20 组组合 | ✅ 全部通过：`content ≥ 1 格`、不越界、offset 非负 |
 
 ---
@@ -861,15 +879,18 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 
 ### 仍然开放的事项（不在原问题清单内）
 
-| 事项 | 为什么没做 | 建议 |
+> ⚠️ **本表写于审查当时**。其中多项**现已完成** —— 逐条状态见下表「现状」列，
+> **排期与进度唯一真源是 [PLAN.md](PLAN.md)**。
+
+| 事项 | 为什么当时没做 | 现状 |
 |---|---|---|
-| **C2 分块渲染** | 会改变产出物形态（多图/多次 toBlob），属产品决策 | 若要进一步降桌面端峰值内存与卡顿，仍推荐做 |
-| **原生 ESM 迁移**（REFACTOR 步骤 0） | 见 REFACTOR.md §4.1；已决策但未实施 —— **不阻塞功能开发** | 猴补丁阻塞**已解除**（§7.1 步骤 1）；现在只剩"改造测试脚手架"这一前置（§7.3），须与步骤 0 **同批**做 |
-| **模块搬迁**（REFACTOR 步骤 5） | 依赖步骤 0 | 三个硬阻塞已解除、重复逻辑已清偿，搬迁时可直接整体搬走（见 §4.2 的搬迁提示） |
-| **`pointermove` 三合一回调**（REFACTOR 步骤 6） | 已加每帧合并，性能问题已缓解 | 降级为"可读性重构"，**可安全延后** |
-| ~~**`dragStart` 双语义拆分**~~ | ✅ **已拆分**（§7.1 步骤 3b）：`dragStartImage` / `dragStartClient` / `panStartPan` | 已按"不当 bug 修"执行 —— **只拆字段与改名，行为零变化** |
-| **`n8` `findNearestColor` 对 NaN 退化为 A1** | 当前调用链不可达 | 保留记录，改采样路径时注意 |
-| **`REGEXP`/ESLint 完整接入** | 本机无 ESLint 依赖，且项目刻意零依赖 | 已有 `lint-noundef.js` 覆盖**本报告真实踩过**的那类错误 |
+| **C2 分块渲染** | 会改变产出物形态（多图/多次 toBlob），属产品决策 | 🔜 **仍未做**（属可选优化）。若要进一步降桌面端峰值内存与卡顿，仍推荐做 —— 见 [PLAN.md](PLAN.md) §3.2 |
+| **原生 ESM 迁移**（REFACTOR 步骤 0） | 见 REFACTOR.md §4.1 | ✅ **已完成** —— 见 [REFACTOR.md](REFACTOR.md) §八 |
+| **模块搬迁**（REFACTOR 步骤 5） | 依赖步骤 0 | ✅ **已完成** —— `app.js` 已删除，19 个模块各有归属 |
+| **`pointermove` 三合一回调**（REFACTOR 步骤 6） | 已加每帧合并，性能问题已缓解 | 🔜 **降级为"可读性重构"，已置后** —— 排期见 [PLAN.md](PLAN.md) §5.1 最后一步 |
+| ~~**`dragStart` 双语义拆分**~~ | ✅ **已拆分**（步骤 3b）：`dragStartImage` / `dragStartClient` / `panStartPan` | ✅ 已按"不当 bug 修"执行 —— **只拆字段与改名，行为零变化** |
+| **`n8` `findNearestColor` 对 NaN 退化为 A1** | 当前调用链不可达 | 🔜 **仍开放** —— 保留记录，改采样路径时注意 |
+| **`REGEXP`/ESLint 完整接入** | 本机无 ESLint 依赖，且项目刻意零依赖 | 🔜 **仍开放** —— 已有 `lint-noundef.js` 覆盖**本报告真实踩过**的那类错误 |
 
 ---
 
@@ -890,7 +911,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 
 
 **本报告内部的两次自我更正（如实记录）**：
-1. 我曾误判 [app.js:445-448](app.js#L445-L448) 取错字段 —— 复核后确认**不是 bug**
+1. 我曾误判 `app.js:445-448` 取错字段 —— 复核后确认**不是 bug**
    （`dragStart` 写入格式确为 `{ix,iy}`）。
 2. 我曾断言"`findNearestColor` 在等距时可能选到第三个颜色" —— 那是我测试脚本的**舍入假象**，
    经复核该函数是确定的。**未计入问题清单。**
@@ -992,17 +1013,24 @@ REVIEW §八 的两个真实缺陷（`ReferenceError`、提示写进隐藏容器
 
 | 原则 | 具体做法 |
 |---|---|
-| **加载真实代码** | `jsdom` 读**真实的 `index.html`**，`vm` 执行**真实的 `color-palette.js` + `app.js`**，不复制任何逻辑 |
+| **加载真实代码** | `jsdom` 读**真实的 `index.html`**，并**真实 `import()` 加载 `js/` 下的模块**（ESM 化后不再是 `vm` 拼接源码），不复制任何逻辑 |
 | **canvas 用真实像素缓冲** | 自实现 `getImageData`/`fillRect`/`drawImage`，**忠实复现规范**（含 `sw=0` 抛 `IndexSizeError`） |
 | **断言用户可感知的输出** | DOM 文本、`aria-live` 内容、画布实际尺寸、toast 是否**可见**、绘制调用次数 |
 | **覆盖失败路径** | `toBlob` 回 null、资源 500、离线、越界选框、全透明图 |
 | **负向对照** | 静态检查工具必须先**证明能抓到**注入的缺陷，才算有效（见下） |
 
-### 套件清单（**20 个套件 / 188 条断言**，全绿）
+### 套件清单（**21 个套件 / 193 条断言**，全绿）
 
 ```
 node run-all.js          # 一键跑全部
 ```
+
+> ⚠️ **本节数字是本文档写作时的值**（本文档其他处的"20 套件 / 188 断言"更早）。
+> **套件清单会随功能开发继续增长** ——
+> **现状唯一真源是 [PLAN.md](PLAN.md) §6.6**，本节不再自称"最新"。
+>
+> 📌 **ESM 化后脚手架已改造**：不再是 `vm` 拼接源码，改为
+> **「每个用例一个 runner 子进程 + 真实 `import()`」**，架构见 [REFACTOR.md](REFACTOR.md) §8.4。
 
 | 套件 | 覆盖 |
 |---|---|
@@ -1037,7 +1065,7 @@ node run-all.js          # 一键跑全部
 | `verify-browser.js` | `python -m http.server 8137` + `npm i ws` | **真实 Chrome**（CDP）端到端：真实上传→合并→预览文案→滑块拖动→真实导出 PNG，**10 项断言** |
 | `verify-ruler-browser.js` | `python -m http.server 8137` + `npm i ws` | **真实 Chrome** 验证行列标尺：**读真实像素**（`getImageData`）确认边距里真的画了字、关闭后深灰标尺像素归零、导出画布尺寸在限内、52×52 无横向滚动，**9 项断言** |
 | `shot-ruler.js` | 同上 | 截出预览（29/52/104）、导出画布、关闭对照图，供**人工核验观感** |
-| `probe-simplify-mutation.js` | 无 | **突变测试**：把 `app.js` 改回 4 种"旧行为"形态，断言 `test-simplify.js` **必须转红**；跑完自动逐字还原并校验一致性 |
+| `probe-simplify-mutation.js` | 无 | **突变测试**：把产品代码改回 4 种"旧行为"形态，断言 `test-simplify.js` **必须转红**；跑完自动逐字还原并校验一致性 |
 | `probe-ruler-mutation.js` | 无 | **突变测试**：8 种"看起来能跑但行为错"的标尺形态（含"导出不画""关掉仍加边距""边距不进尺寸"），断言 `test-ruler.js` 必须转红 |
 | `probe-ruler.js` | 无 | 复算标尺密度分档、四档导出尺寸（标尺开/关）、dpr 是否被挤降档 |
 | `probe-ruler-preview.js` | 无 | 六种视口宽度 × 三档网格的预览尺寸，验证不溢出容器 |
@@ -1095,5 +1123,6 @@ node run-all.js          # 一键跑全部
 
 ---
 
-**已决定但尚未实施的事项**（不在本报告问题清单内）：改用原生 ESM —— 见 CLAUDE.md「运行方式」
-与 [REFACTOR.md](REFACTOR.md) §4.1。代价是"双击 `index.html`"不再可用。
+**已决定且已实施的事项**（不在本报告问题清单内）：改用原生 ESM —— ✅ **已完成**，
+见 [REFACTOR.md](REFACTOR.md) §八 与 [../CLAUDE.md](../CLAUDE.md)「运行方式」。
+代价是"双击 `index.html`"不再可用。

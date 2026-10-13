@@ -95,7 +95,10 @@ sw.js               — Service Worker
 icon.svg            — 应用图标源文件
 icon-192.png        — 192×192 PWA 图标
 icon-512.png        — 512×512 PWA 图标
-CLAUDE.md           — 开发文档
+CLAUDE.md           — 开发文档（面向 AI 的技术说明）
+docs/PLAN.md        — 开发计划与执行进度
+docs/REFACTOR.md    — 代码结构对策
+docs/REVIEW.md      — 代码审查报告
 ```
 
 > **改完代码记得递增 `sw.js` 里的 `CACHE_NAME`** —— 它是 cache-first，
@@ -104,7 +107,7 @@ CLAUDE.md           — 开发文档
 > ⚠️ **新增模块时必须在 `js/main.js` 里补一条 `import`**（若它不被其它模块引用）。
 > 浏览器是**从入口的 import 出发**加载模块的 —— 没被 import 到的文件
 > **根本不会被请求**，页面会静默少功能，而且**跑测试也发现不了**。
-> 细节见 [REFACTOR.md](REFACTOR.md) §8.7。
+> 细节见 [docs/REFACTOR.md](docs/REFACTOR.md) §8.7。
 
 ## 色板说明
 
