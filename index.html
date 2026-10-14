@@ -134,11 +134,23 @@
             <span class="control-label">行列标尺</span>
           </label>
         </div>
+        <!-- A4 打印（PLAN §4.2~4.5）：与 PNG 导出**并存**，不互相替代。
+             打印走独立 DOM 布局 + window.print()，不经位图 ——
+             因为 PNG 里没有物理尺寸（toBlob 固定 96dpi），而 CSS 的 mm 是真实单位。 -->
+        <div class="control-group print-group">
+          <label class="ruler-toggle" for="printColorToggle">
+            <input type="checkbox" id="printColorToggle" checked>
+            <span class="control-label">打印色块</span>
+          </label>
+        </div>
         <div class="control-group">
           <button id="downloadBtn" class="btn btn-primary" disabled
                   aria-describedby="downloadHint">📥 下载 PNG</button>
           <!-- 禁用原因必须可被读屏取到：disabled 按钮不可聚焦，读屏拿不到原因（见 REVIEW.md M5） -->
           <span class="visually-hidden" id="downloadHint">请先上传图片并框选区域，生成图纸后即可下载</span>
+          <button id="printBtn" class="btn btn-print" disabled
+                  aria-describedby="printHint">🖨 打印 A4</button>
+          <span class="visually-hidden" id="printHint">请先上传图片并框选区域，生成图纸后即可打印</span>
           <button id="shareBtn" class="btn btn-share" hidden>
             <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
@@ -160,6 +172,9 @@
                 aria-label="拼豆图纸预览"></canvas>
       </div>
       <p class="preview-info" id="previewInfo"></p>
+      <!-- 打印版面预览说明：PLAN §五 第二批第 5 项要求"屏幕上先给用户页数与每格尺寸预览"。
+           打印是**不可逆的物理动作**（费纸费墨），用户必须在点之前就知道会出几页、格子多大。 -->
+      <p class="preview-info print-info" id="printInfo"></p>
     </section>
 
     <!-- ====== 颜色统计 ====== -->
@@ -206,6 +221,12 @@
     <canvas id="offscreenCanvas" hidden></canvas>
     <!-- ====== 隐藏画布用于下载合成 ====== -->
     <canvas id="downloadCanvas" hidden></canvas>
+
+    <!-- ====== A4 打印版面（PLAN §4.2：独立 DOM 布局，不经位图） ======
+         屏幕上**完全隐藏**，只在 @media print 下显示；同时打印时反转 hide 屏幕 UI。
+         色号是真实文本节点 ⇒ 由打印机按自身分辨率渲染，600dpi/300dpi 都清晰（§4.2 优势②）。
+         ⚠️ 结构由 js/output/print.js 逐页填充；这里只给挂载点。 -->
+    <div id="printRoot" aria-hidden="true"><div id="printPages"></div></div>
 
   </main>
 

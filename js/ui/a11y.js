@@ -1,4 +1,4 @@
-import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
+import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, printBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
 import { state, viewerCtx } from '../core/state.js';
 import { generateGrid } from '../pipeline/grid.js';
 import { resetSimplify } from './grid-select.js';
@@ -125,6 +125,8 @@ $('#resetBtn').addEventListener('click', () => {
   previewSection.hidden = true;
   statsSection.hidden = true;
   downloadBtn.disabled = true;
+  // 打印出口同上：重置后必须回到禁用态，否则用户能对**已清空的图纸**唤起打印
+  printBtn.disabled = true;
   fileInput.value = '';
 });
 

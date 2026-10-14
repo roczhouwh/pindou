@@ -60,6 +60,7 @@ js/pipeline/        render.js   — drawGrid / drawRuler / rulerMetrics / pickTe
 js/output/          preview.js  — fitPreviewGrid / renderPreview
                     stats.js    — renderStats
                     export.js   — computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
+                    print.js    — encodeCellName / computePrintPaging / renderPrintLayout / printGrid（A4 打印出口）
 js/ui/              a11y.js     — announce / markActiveGridBtn / 键盘通路 / clamp
                     grid-select.js — 网格预设 / 自定义 / 简化滑块 / 标尺开关
                     loading.js  — showLoading / hideLoading
@@ -160,6 +161,7 @@ js/main.js          — **模块入口**（ESM 单入口）
 | `aspectWarning` | 极端宽高比的量化偏差提示文本（无则 `null`），由 `generateGrid` 写入、`renderPreview` 展示 |
 | `mergedColors` | 本轮被**近似色合并**掉的色号，形如 `[{from:"H12", to:"E16"}]`（无则空数组）。由 `applySimplify()` 写入、`renderPreview()` 展示到 `#previewInfo`。**每轮重算的展示用字段，不参与持久化** |
 | `rulerEnabled` | 是否显示**行列标尺**，默认 `true`。**显示偏好，不是图像参数** —— `handleFile()` 刻意**不重置**它（与 `simplify` 相反）。只影响绘制，切换时**不重新生成网格** |
+| `printColorBlocks` | 打印时**是否输出色块底色**，默认 `true`。**输出偏好，不是图像参数** —— `handleFile()` 同样刻意**不重置**（与 `rulerEnabled` 同例、与 `simplify` 相反）。关掉即 §4.5 的**省墨模式**（只印网格线与色号）。见下方「A4 打印出口」 |
 | `dragStartImage` / `dragStartClient` / `panStartPan` | ✅ **语义已拆开**：分别为**归一化图片坐标** / **client 像素坐标** / **pan 偏移量起点**。此前挤在一个 `dragStart`/`panStart` 里（同名不同形状）。**不要合并回去，也不要跨语义混用**（`test-dragstart-semantics.js` 守护） |
 
 ## 色板 (color-palette.js)
@@ -200,6 +202,11 @@ js/main.js          — **模块入口**（ESM 单入口）
 - **极端比例提示**：内容短边格数过少时（量化偏差 > 8%）在预览信息处如实警告
 - **拍照上传**：移动端显示拍照按钮，调用原生相机
 - **分享**：支持 Web Share API 的设备可分享 PNG 文件
+- **A4 打印**：「🖨 打印 A4」按钮走**独立 DOM 布局 + `window.print()`**（与 PNG 导出并存）。
+  每页 52 列、每格 3.846mm、色号 6.2pt；52×52 ⇒ **1 页**，104×104 ⇒ **4 页**（2×2 拼接，
+  页眉标注"第 N/4 页 · 第 X 行第 Y 块 · 列 a-b / 行 c-d"）。点之前屏幕上先给出页数与每格尺寸。
+  **「打印色块」**复选框控制是否输出色块底色 —— 关掉即**省墨模式**（只印网格线与色号，
+  灰度下色号是唯一信息源）。见下方「A4 打印出口」小节
 
 ## 预览参数
 
@@ -248,7 +255,7 @@ js/main.js          — **模块入口**（ESM 单入口）
 
 ## 🧩 共用绘制/几何函数（新功能应复用，不要另写一份）
 
-> **A4 打印应直接复用 `drawGrid`**，不要新写绘制循环。改动它们前先看对应的守护套件。
+> 改动它们前先看对应的守护套件。
 
 | 函数 | 职责 | 守护套件 |
 |---|---|---|
@@ -270,6 +277,74 @@ js/main.js          — **模块入口**（ESM 单入口）
 > ⚠️ **`computeImageRect` 必须保留 `w/h` 参数**：三个调用方的宽度来源**本就不同**
 > （`viewerCanvas.width` vs `getBoundingClientRect().width`），
 > 在 iOS 的 0 尺寸时序窗口内不相等。**让它自己取尺寸会改回已修的 iOS 缺陷。**
+
+## 🖨 A4 打印出口（改 `js/output/print.js` 前必读）
+
+> 与 PNG 导出**并存**，不互相替代（PLAN §4.2）。守护套件 `test-print.js`（31 条）
+> + `probe-print-mutation.js`（25 种突变）+ `verify-print-browser.js`（真实 Chrome 18 条）
+> + `verify-print-e2e.js`（真实 Chrome 12 条，完整用户流程）。
+
+**为什么不用"导出图片再打印"**：`canvas.toBlob` 固定写 **96dpi** 元数据，
+PNG 里**没有物理尺寸**。52×52 走"100% 原始大小"是 78.7cm 宽、
+"适应页面"每格只有 3.846mm —— 两个极端都不可用（PLAN §4.1）。
+打印出口走**独立 DOM 布局 + `@page`**：CSS 的 `mm` 是真实物理单位。
+
+| 常量 / 函数 | 职责 |
+|---|---|
+| `PRINT_PRINTABLE_W_MM = 200` | A4 可打印宽（210 − 5mm×2）。分页与每格尺寸的基准 |
+| `PRINT_COLS_PER_PAGE = 52` | 每页列数。52×52 主路径 ⇒ **1 页** |
+| `PRINT_CELL_MM` | **= 200/52 ≈ 3.846mm**（不是 3.85） |
+| `PRINT_FONT_PT = 6.2` | 色号字号（实测定案） |
+| `encodeCellName(name)` | 色号 → 2 字符编码（`A10` → `Aa`） |
+| `computePrintPaging(cols, rows)` | 分页（每边 `ceil(n/52)`）+ 每格 mm |
+| `forEachPrintPage(paging, fn)` | 遍历每页块范围（行优先） |
+| `renderPrintLayout(grid, opts)` | 构建打印 DOM（一页一个 `.print-page`） |
+| `printGrid()` | 构建版面 + `window.print()` |
+
+**五条硬约束**：
+
+1. **每格必须用精确除法 `200/52`，不要写成 3.85** —— `3.85 × 52 = 200.2mm`
+   **超出可打印宽 0.2mm**，表现为"多出空白页/整体被缩小"，
+   会被误判成"`@page` 不支持"（PLAN §4.6 项 3 的判据专门提醒过）。
+   ⚠️ **每格尺寸只有一个真源**：`computePrintPaging().cellMm` 必须**引用**
+   `PRINT_CELL_MM`，不要再写一遍 `200/pageCols`（实测踩过：两处各算一次时，
+   改常量对分页毫无影响，常量成了**死代码** —— 突变测试才发现）。
+2. **⚠️⚠️ 绝不能加 `print-color-adjust: exact`** —— 该属性的用途正是"强制打印背景"，
+   加了它，「背景图形」复选框**彻底失效**（实测：不勾也是全彩，
+   两份 PDF 的彩色填充种数**完全相同**）。它与"让用户能选省墨模式"**互斥**，
+   故改由显式开关 `#printColorToggle` 承担。**这是本功能最大的红线。**
+3. **网格线必须用 `border`，不能用 `background`** —— 实测不勾「背景图形」时
+   `background` 会随色块**一起消失**，而 `border` 仍以 `#ababab` 印出。
+   用 background 的后果是省墨模式下只剩色号、没有格子边界，没法照着拼。
+4. **色号必须是真实文本节点**（不画在 canvas 上）—— DOM 文字由打印机按自身分辨率渲染，
+   这才是"色号必须看得清"被**根本性满足**的方式（§4.2 优势②）。
+   黑白字判定**复用 `pickTextColor()`**，不要抄第二份。
+5. **`.print-page` 宽度 = 200mm，不是 210mm**（`@page` 的 5mm 边距已占掉两侧）；
+   **末页必须 `break-after: auto`**（多余分页符会印出空白页）。
+6. **界面文案的每格尺寸用 `toFixed(3)`（显示 3.846），不用 `toFixed(2)`** ——
+   2 位会显示成 **3.85**，而那正是 §4.3 初版**会超宽 0.2mm** 的错误值。
+   界面上写 3.85 会让人以为代码用的就是这个数，**照着界面改代码就会真的引入该缺陷**。
+
+**为什么不复用 `drawGrid()`**（PLAN 原写"复用 render.js、不新写绘制循环"，
+实测后**改为**只复用 `pickTextColor()`）——三条理由，均可复核：
+
+| # | 原因 |
+|---|---|
+| 1 | `drawGrid` 的单位是 **px**，而打印版面的约束是 **mm**。`@page` 一生效，浏览器按纸面 mm 重排，**px↔mm 折算不再由我们控制** —— 折算错就静默改变物理尺寸，正是本方案要根治的问题 |
+| 2 | `drawGrid` 按 `minCell * 0.35` **自算**字号，而 §4.6 项 1 已**实测定案 6.2pt**（独立常量，非派生） |
+| 3 | 打印要求"色号是**矢量文字**"与"关掉复选框 = **省墨模式**" —— 这两条只能由 DOM 文字 + CSS 提供，canvas 给不了 |
+
+> **"不新写绘制循环"这条要求本身与打印路线的物理尺寸约束互斥** ——
+> 打印的"绘制"就是 DOM，不存在第二套 canvas 绘制循环可写。
+
+> ⚠️ **`state.printColorBlocks` 是输出偏好，`handleFile()` 刻意不重置** ——
+> 与 `rulerEnabled` 同例，与 `simplify`（图像参数，必须归零）相反。
+
+> ⚠️ **jsdom 验不了打印版面**：它不解析 `@media print` / `@page`
+> （实测 `getComputedStyle(.print-cell).borderTopWidth` 恒为 0px、`fontSize` 恒为空）。
+> 所以"纸上是什么样"**只能**由真实浏览器回答 —— 改打印相关代码后必须手动跑
+> `verify-print-browser.js`（自动起服务与 Chrome）。
+> 而"字号是否看得清"**没有自动化判据**，仍须人眼看纸（`docs/print-proof-a4.html`）。
 
 ## ⚠️ 近似色合并（改 `applySimplify` 前必读）
 
@@ -387,8 +462,7 @@ python3 -m http.server 8080
 > **完整清单、优先级排序、执行进度与实施方案见 [docs/PLAN.md](docs/PLAN.md)**。
 > 本节**仅保留索引**，避免两份清单各自漂移。
 
-**尚未开工**：A4 打印导出（PLAN §四）、单元格编辑 + 撤销/重做（PLAN §3.4）、
-网格保存/加载、抖动算法、分块渲染。
+**尚未开工**：单元格编辑 + 撤销/重做（PLAN §3.4）、网格保存/加载、抖动算法、分块渲染。
 
 **已搁置**：多品牌色板支持（依赖色板抽象，成本主要在数据可靠性）、
 色板自定义编辑（依赖最多、风险最高，需版本化）、

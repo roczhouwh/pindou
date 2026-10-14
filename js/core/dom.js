@@ -54,6 +54,14 @@ export const cameraBtn = $('#cameraBtn');
 export const shareBtn = $('#shareBtn');
 export const loadingOverlay = $('#loadingOverlay');
 export const loadingText = $('#loadingText');
+// ---- A4 打印出口（PLAN §4.2~4.5 / js/output/print.js）----
+export const printBtn = $('#printBtn');
+export const printColorToggle = $('#printColorToggle');
+/** 打印版面容器（#printRoot 仅在 @media print 下可见，屏幕上隐藏） */
+export const printRoot = $('#printRoot');
+/** 逐页 <section> 的挂载点 —— print.js 只清空/重填这里，不动 #printRoot 自身 */
+export const printPages = $('#printPages');
+export const printInfo = $('#printInfo');
 export const installBanner = $('#installBanner');
 export const installBtn = $('#installBtn');
 export const installClose = $('#installClose');

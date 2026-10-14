@@ -824,7 +824,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 | **`sw.js` 是否越权拦截同源其它项目** | 代码核对 [80-104](../sw.js#L80-L104) | ✅ 设计原则与代码**相符**（同源 + GET + 白名单 + 导航走网络优先） |
 | **`APP_SIGNATURE` 校验** | grep 校验 | ✅ 有效，不会误存他站首页 |
 | **旧缓存清理** | 代码核对 [sw.js:49-63](../sw.js#L49-L63) | ✅ 正确，与 `CACHE_NAME` 版本号配套 |
-| **`[hidden] { display:none !important }`** | 代码核对 | ✅ **必要且正确** —— 挡住了 `.camera-overlay{display:flex}` 冲突。**不要删这条** |
+| **`[hidden] { display:none !important }`** | 代码核对 | ✅ **必要且正确** —— 挡住了 `.camera-overlay{display:flex}` 冲突。**不要删这条**<br>⚠️ **连带约束（后续踩到过）**：**`.visually-hidden` 不得再写 `display`** —— 它是 `clip-path` + 1px 的读屏隐藏，与 `[hidden]` 是两套机制；给它加 `display:none !important`（如打印样式里"顺手隐藏屏幕 UI"）会让同一件事有两处声明。`test-section5-guard.js` 守护这条 |
 | **iOS 14.4 兼容注释与代码是否对应** | 三方核对 | ✅ 注释描述与 `.visible` class 用法一致 |
 | **4 个 canvas 是否都有用途** | 代码核对 | ✅ 无闲置 canvas |
 | **`findNearestColor` 是否确定可复现**（影响色号稳定性） | 脚本实测 24,310 组 | ✅ **确定**。用严格 `<`（[color-palette.js:248](../color-palette.js#L248)），精确等距时取**先出现者**，同输入恒同输出。PLAN §3.1 的"跳变"是**采样值抖动**所致，**不是**匹配函数本身不确定 |
@@ -886,7 +886,7 @@ const winH = Math.max(2, Math.floor(cellSampH * 0.5));
 |---|---|---|
 | **C2 分块渲染** | 会改变产出物形态（多图/多次 toBlob），属产品决策 | 🔜 **仍未做**（属可选优化）。若要进一步降桌面端峰值内存与卡顿，仍推荐做 —— 见 [PLAN.md](PLAN.md) §3.2 |
 | **原生 ESM 迁移**（REFACTOR 步骤 0） | 见 REFACTOR.md §4.1 | ✅ **已完成** —— 见 [REFACTOR.md](REFACTOR.md) §八 |
-| **模块搬迁**（REFACTOR 步骤 5） | 依赖步骤 0 | ✅ **已完成** —— `app.js` 已删除，19 个模块各有归属 |
+| **模块搬迁**（REFACTOR 步骤 5） | 依赖步骤 0 | ✅ **已完成** —— `app.js` 已删除，模块各有归属（步骤 5 时 18 个；现 **19** 个，含后续新增的 `js/output/print.js`） |
 | **`pointermove` 三合一回调**（REFACTOR 步骤 6） | 已加每帧合并，性能问题已缓解 | 🔜 **降级为"可读性重构"，已置后** —— 排期见 [PLAN.md](PLAN.md) §5.1 最后一步 |
 | ~~**`dragStart` 双语义拆分**~~ | ✅ **已拆分**（步骤 3b）：`dragStartImage` / `dragStartClient` / `panStartPan` | ✅ 已按"不当 bug 修"执行 —— **只拆字段与改名，行为零变化** |
 | **`n8` `findNearestColor` 对 NaN 退化为 A1** | 当前调用链不可达 | 🔜 **仍开放** —— 保留记录，改采样路径时注意 |

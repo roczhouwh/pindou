@@ -1,5 +1,5 @@
 import { findNearestColor } from '../../color-palette.js';
-import { $, downloadBtn, offscreenCanvas } from '../core/dom.js';
+import { $, downloadBtn, offscreenCanvas, printBtn } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { showToast } from '../input/upload.js';
 import { renderPreview } from '../output/preview.js';
@@ -235,6 +235,10 @@ export function generateGridCore() {
   renderPreview();
   renderStats();
   downloadBtn.disabled = false;
+  // 打印出口与 PNG 导出**并存**（PLAN §4.2）：两者都以"图纸已生成"为前提，
+  // 故启用时机与 downloadBtn 完全一致。⚠️ 漏了这一行 ⇒ 按钮永远灰色，
+  // 用户观感就是"打印功能没做"（与 export.js 漏装配等价的表现）。
+  printBtn.disabled = false;
   // 播报生成结果：读屏用户此前对"图纸已生成"完全无感（见 REVIEW.md M5）
   announce(`图纸已生成：${gw}×${gh} 网格，${state.colorCounts ? state.colorCounts.length : 0} 种颜色`);
 }

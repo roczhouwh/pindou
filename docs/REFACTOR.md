@@ -48,7 +48,7 @@
 
 | 指标 | 写作时 | 改造前峰值 | **当前** |
 |---|---|---|---|
-| `app.js` 行数 | 1326 | 2137 | **已删除**（内容全部迁至 `js/` 下 19 个模块） |
+| `app.js` 行数 | 1326 | 2137 | **已删除**（内容全部迁至 `js/` 下 19 个模块，含入口 `main.js`） |
 | 承载的特性域 | 12 个 | 12 个 | 分散在 `js/{core,input,viewer,pipeline,output,ui}/` |
 | 顶层函数 | 21 个 | 29+ 个 | 按特性域归属各模块，跨模块引用显式 `import` |
 | 顶层事件监听 | 26 处 | 28 处 | 随所属领域落位 |
@@ -58,6 +58,8 @@
 > **⚠️ 模块边界已建立。** §7.1 的「前四步」与「步骤 0（改 ESM）」「步骤 5（模块搬迁）」
 > **均已全部完成**：三个硬阻塞解除、重复逻辑 4 项收敛为单一实现、
 > 19 个模块各有明确归属、跨模块依赖由 `import` 语句显式表达。
+> （步骤 5 完成时为 18 个；PLAN §五 第二批第 5 项新增 `js/output/print.js` 后为 **19** 个，
+> 恰好是本节一直写的数字 —— 见 §8.3 模块清单。）
 >
 > **未完成的结构收尾项（拆 `pointermove` 三合一回调 + 跨领域调用收拢到 `main.js`）
 > 已作为最后一步记入 [PLAN.md](PLAN.md)** —— 见 §7.1 与 §3.3。
@@ -281,7 +283,7 @@ js/
 │   ├── preview.js        # fitPreviewGrid / renderPreview
 │   ├── stats.js          # renderStats
 │   ├── export.js         # computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
-│   └── print.js          # 【PLAN A4 打印预留】独立于此，可直接复用 drawGrid
+│   └── print.js          # encodeCellName / computePrintPaging / renderPrintLayout / printGrid（A4 打印出口）
 ├── ui/
 │   ├── a11y.js           # announce / markActiveGridBtn / 键盘通路 / clamp
 │   ├── grid-select.js    # 网格预设 / 自定义 / 简化滑块 / 标尺开关
@@ -381,7 +383,21 @@ js/
 
 > **✅ 该节奏已按计划执行**，并被验证有效：前几步全程在脚手架保护下完成，未出现回归；
 > 其中**步骤 4 抽出的 `drawGrid()` 被 PLAN §3.5 行列标尺实际复用** ——
-> **"先抽公共函数、再做功能"的顺序判断得到验证**，A4 打印同样可直接复用。
+> **"先抽公共函数、再做功能"的顺序判断得到验证**（标尺只新增绘制与尺寸计算，
+> 未触碰采样核心任何一行）。
+>
+> ⚠️ **但 A4 打印是个例外，值得记下来**：PLAN §四原写"打印出口应直接复用 `drawGrid()`，
+> 不要新写绘制循环"，实施时**做不到**，只复用了 `pickTextColor()`。原因不是"懒得复用"，
+> 而是**两种出口的尺寸单位根本不同**：`drawGrid` 的单位是 **px**，
+> 打印版面的唯一约束是 **mm**（每格 200/52mm、色号 6.2pt）；`@page` 一生效，
+> 浏览器按纸面 mm 重排，**px↔mm 折算不再由代码控制** —— 折算错就会静默改变物理尺寸，
+> 那正是打印方案要根治的问题。加上色号字号是**实测定案的独立常量**（不是从格子尺寸派生），
+> 以及"矢量文字 + 省墨模式"只能由 DOM+CSS 提供，共三条理由。
+>
+> > **教训**：「先抽公共函数、再做功能」这个判断本身是对的，但它的适用前提是
+> > **两个出口共用同一套坐标与单位系统**（预览/导出都是 canvas + px，所以复用成立）。
+> > 一旦出现**单位体系不同**的出口（打印是 DOM + mm），"复用绘制循环"就不再是正确目标 ——
+> > 硬套反而会引入折算误差。**复用与否要看前提，不要当口号。**
 
 ---
 
@@ -401,7 +417,7 @@ js/
 
 | 步骤 | 原定动作 | 当前状态 |
 |---|---|---|
-| **0** | 建 `js/` + 改 ESM + SW 清单同步 | ✅ **已完成** —— 19 个模块改原生 ESM，`index.html` 收敛为单入口，`sw.js` 清单与 `CACHE_NAME` 已同步。守护：`probe-verify-entry-chain.js`、`probe-esm-cost.js` |
+| **0** | 建 `js/` + 改 ESM + SW 清单同步 | ✅ **已完成** —— 模块改原生 ESM（步骤 5 时 18 个，现 **19** 个，见 §8.3 清单），`index.html` 收敛为单入口，`sw.js` 清单与 `CACHE_NAME` 已同步。守护：`probe-verify-entry-chain.js`、`probe-esm-cost.js` |
 | **1** | 拆猴补丁 | ✅ **已完成** —— 守护：`test-patch-removal.js` |
 | **2** | 抽 `computeImageRect()` | ✅ **已完成** —— 重复 **3 份 → 1 份**。守护：`test-compute-image-rect.js` |
 | **3a** | 补齐 `state` 声明 | ✅ **已完成** |
@@ -811,20 +827,26 @@ js/
 
 > 脚手架在仓库**之外**（`F:\claudeapp\demo\.pindou-devtools\`，刻意不污染零依赖交付物）。
 
-#### 模块清单（步骤 5 的产出，步骤 0 后未变）
+#### 模块清单（步骤 5 的产出 = 18 个；现 19 个）
 
 ```
-js/core/     dom.js      state.js
-js/input/    camera.js   upload.js
-js/viewer/   viewer.js   selection.js   panzoom.js
-js/pipeline/ render.js   simplify.js   grid.js
-js/output/   preview.js  stats.js      export.js
-js/ui/       a11y.js     grid-select.js  loading.js  install.js
-js/main.js   ← 模块入口（静态 import 拉起整张图）
+js/core/     dom.js      state.js                                     ← 2
+js/input/    camera.js   upload.js                                    ← 2
+js/viewer/   viewer.js   selection.js   panzoom.js                    ← 3
+js/pipeline/ render.js   simplify.js   grid.js                        ← 3
+js/output/   preview.js  stats.js      export.js    print.js          ← 4（print.js 为后续新增）
+js/ui/       a11y.js     grid-select.js  loading.js  install.js       ← 4
+js/main.js   ← 模块入口（静态 import 拉起整张图）                        ← 1
+                                                  合计 19 个 js/ 模块
 ```
+> `color-palette.js` 在仓库根目录（不属于 `js/`），入口亦可达 ——
+> `probe-verify-entry-chain.js` 报的"共 20 个节点"即 19 + 它。
 
 > ⚠️ **ESM 后「加载顺序不能颠倒」这条约束已消失** ——
 > 依赖顺序由各模块的 `import` 语句表达，ESM 解析器负责拓扑排序。
+>
+> ⚠️ **但新增模块必须在 `js/main.js` 补一条 import**（若它不被其它模块引用），
+> 否则它**永远不会被浏览器请求** —— `probe-verify-entry-chain.js` 守护这条。
 
 #### 命令速查
 

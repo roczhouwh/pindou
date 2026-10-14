@@ -28,7 +28,11 @@
 // v17：REFACTOR §7.1 步骤 5 **拆文件完成** —— 新增 js/input/ 与 js/ui/ 其余模块
 //      （upload / camera / grid-select / loading / install）+ js/main.js；
 //      **app.js 已删除**（内容全部迁出，编排层改为 js/main.js）
-const CACHE_NAME = 'pindou-v18';
+// v18：PLAN §五 第二批第 5 项 A4 打印出口 —— 新增 js/output/print.js
+//      （独立 DOM 布局 + window.print()，与 PNG 导出并存）；
+//      index.html 新增 #printBtn / #printColorToggle / #printRoot，#printColorToggle
+//      关闭即 §4.5 的"省墨模式"
+const CACHE_NAME = 'pindou-v19';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -54,6 +58,7 @@ const ASSET_PATHS = [
   './js/output/preview.js',
   './js/output/stats.js',
   './js/output/export.js',
+  './js/output/print.js',
   './js/ui/a11y.js',
   './js/ui/grid-select.js',
   './js/ui/loading.js',

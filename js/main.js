@@ -70,6 +70,7 @@ import './viewer/panzoom.js';
 import './output/preview.js';
 import './output/stats.js';
 import './output/export.js';
+import './output/print.js';
 import './ui/a11y.js';
 import './ui/grid-select.js';
 import './ui/loading.js';

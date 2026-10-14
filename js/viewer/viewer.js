@@ -1,4 +1,4 @@
-import { controlsSection, downloadBtn, isTouchDevice, previewSection, selectionBox, statsSection, uploadSection, viewerCanvas, viewerHint, viewerHint2, viewerHint3, viewerHint4, viewerSection, viewerWrapper } from '../core/dom.js';
+import { controlsSection, downloadBtn, isTouchDevice, previewSection, printBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerHint, viewerHint2, viewerHint3, viewerHint4, viewerSection, viewerWrapper } from '../core/dom.js';
 import { state, viewerCtx } from '../core/state.js';
 import { generateGrid } from '../pipeline/grid.js';
 import { updateSelectionBox } from './selection.js';
@@ -78,6 +78,8 @@ export function showViewer() {
   previewSection.hidden = true;
   statsSection.hidden = true;
   downloadBtn.disabled = true;
+  // 打印出口与 PNG 导出同启用时机（PLAN §4.2）：新图尚未生成图纸，两者都必须禁用
+  printBtn.disabled = true;
   viewerHint.hidden = false;
   viewerHint2.hidden = isTouchDevice;
   viewerHint3.hidden = !isTouchDevice;

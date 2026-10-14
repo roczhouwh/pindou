@@ -832,3 +832,115 @@ body {
     .header { padding-top: calc(24px + env(safe-area-inset-top, 0px)); }
   }
 }
+
+/* ============================================================
+   A4 打印出口（PLAN §4.2~4.5）—— 屏幕态与打印态
+   ============================================================
+   ⚠️⚠️ **本段绝不允许出现 `print-color-adjust: exact`**。
+   该属性的用途正是"强制打印背景"，一旦加上：
+     · 用户不勾「背景图形」时**色块照样全彩印出** ⇒「打印色块」开关形同虚设、
+       §4.5 的**省墨模式彻底消失**；
+     · 实测证据：样张第一版加了它，"不勾背景"与"勾上"两份 PDF 的彩色填充种数
+       **完全相同（444 种）**，用户"看不出区别"—— 这正是 PLAN §4.6「项 4 的真相」。
+   该属性与"让用户能选省墨模式"**互斥**，故**刻意不加**，由 #printColorToggle 显式开关承担。
+
+   ⚠️ 网格线必须用 **border**，不能用 background：实测不勾「背景图形」时
+      background 会随色块一起消失，而 border 仍以 #ababab 印出。
+      写成 background 的后果是省墨模式下只剩色号、没有格子边界，根本没法照着拼。
+   ============================================================ */
+
+/* ---- 屏幕态：打印版面完全隐藏，只在打印时出现 ---- */
+#printRoot { display: none; }
+
+/* 打印信息行：与 #previewInfo 同构，但打印是"不可逆物理动作"，
+   故用左侧色条做视觉区分（用户点之前必须看到页数与每格尺寸）。 */
+.print-info {
+  border-left: 3px solid var(--primary);
+  padding-left: 8px;
+}
+
+/* ---- 打印态 ---- */
+@media print {
+  /* @page 决定纸张与物理边距：mm 是真实物理单位，无需用户调缩放（§4.2 优势①）。
+     ⚠️ 与 docs/print-proof-a4.html 保持同一组数值（5mm 边距 ⇒ 200mm 可打印宽）。 */
+  @page { size: A4; margin: 5mm; }
+
+  /* ---- 屏幕 UI 全部隐藏：只留打印版面 ---- */
+  /* ⚠️ 这里**刻意不列**那个「读屏专用隐藏类」（1×1px + overflow:hidden 的那个）：
+     它在纸上本来就不可能看见；给它再加一条 display 声明会**多出第二处**
+     对同一件事的声明，与既有的 `[hidden] { display:none !important }` 形成双份维护 ——
+     实测会被 `test-section5-guard.js` 判红（该套件守护的正是
+     「读屏隐藏类不得用 display 覆盖 [hidden]」）。
+     ⚠️ 注意别在注释里连着写「类选择器 + display:」——该守护的正则**不剥注释**，
+        写成那样会被自己的注释误判成违规（本轮实测踩到）。 */
+  .header,
+  .upload-section,
+  .viewer-section,
+  .controls-section,
+  .preview-section,
+  .stats-section,
+  .loading-overlay,
+  .toast,
+  .install-banner { display: none !important; }
+
+  .main { padding: 0 !important; gap: 0 !important; display: block !important; }
+  body { background: #fff !important; }
+  html, body { margin: 0; padding: 0; }
+
+  /* ---- 打印版面显示 ---- */
+  #printRoot { display: block !important; }
+
+  /* 一页一块：宽 = 可打印宽 200mm（= 210 − 5mm×2）。
+     ⚠️ 不要写 210mm —— 那是纸宽，@page 的 5mm 边距已经占掉两侧，
+        写成 210mm 会横向溢出，表现为"内容被缩小"或"多出空白页"。 */
+  .print-page {
+    width: 200mm;
+    page-break-after: always;
+    break-after: page;
+  }
+  /* 末页不留分页符 —— 多余的分页符会印出**空白页**，
+     而"无多余空白页"正是 §4.6 项 3 已通过的判据。 */
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .print-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4mm;
+    margin: 0 0 1.5mm 0;
+  }
+  .print-title { font-size: 9pt; font-weight: 700; margin: 0; }
+  .print-pos { font-size: 6.5pt; color: #333; }
+
+  /* ---- 网格：格宽精确 200/52 mm，52 格正好 200mm ---- */
+  .print-grid { display: grid; }
+
+  /* ⚠️ 两个结构性约束，改动前先读 PLAN §4.6「项 4 的真相」：
+     ① 网格线用 border（不勾背景图形时它仍印得出，background 会消失）；
+     ② **不能**用 overflow:hidden 裁剪色号 —— 样张第一版把方框设为定宽+裁剪，
+        文字被裁掉后看起来"不溢出"，**溢出检查变成假通过**。
+        这里同样不裁剪：宁可让越界可见，也不要制造假绿。 */
+  .print-cell {
+    border: 0.2mm solid #ababab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-sizing: border-box;
+  }
+  .print-cell > i {
+    font-style: normal;
+    white-space: nowrap;
+    font-size: 6.2pt;   /* = PRINT_FONT_PT，§4.6 项 1 实测定案；改字体须重新量上限 */
+  }
+  /* 深色格白字 / 浅色格黑字 —— 判定复用 render.js 的 pickTextColor()（Rec.601 亮度），
+     与预览/导出**同一套规则**，三处不会各自漂移。空字符串的 data-fg 不匹配任何一条。 */
+  .print-cell[data-fg="light"] > i { color: #FFFFFF; }
+  .print-cell[data-fg="dark"]  > i { color: #000000; }
+
+  /* 整块网格尽量不断页（拼接用的图纸被从中间切开会失去可拼性） */
+  .print-grid-wrap { break-inside: avoid; }
+}
