@@ -7,6 +7,7 @@
 //   各特性域已按 REFACTOR §4.2 全部落位到 js/ 下：
 //     core/     dom.js        —— $ / $$ / DOM 引用 / isTouchDevice
 //               state.js      —— 常量 / state / viewerCtx / 主题同步
+//               serialize.js  —— 图纸序列化/版本化地基（PLAN 第三批 6a；纯函数，不写 state）
 //     input/    upload.js     —— handleFile / showError / showToast / 上传区监听
 //               camera.js     —— openCamera / capturePhoto / closeCamera
 //     viewer/   viewer.js     —— computeImageRect / renderViewer / resizeViewerCanvas …
@@ -59,6 +60,10 @@
 // 所以这里**不需要**再写任何编排代码 —— 见上方「本文件当前不承载逻辑」。
 import './core/dom.js';
 import './core/state.js';
+// 序列化地基（PLAN 第三批 6a）：目前**没有模块引用它**（6b 的保存/加载 UI 才会接上），
+// 因此这一条 import 是它唯一的可达路径 —— 漏了它，该文件永远不会被浏览器请求。
+// 这也是 `probe-verify-entry-chain.js` 守护的那条规则。
+import './core/serialize.js';
 import './input/camera.js';
 import './input/upload.js';
 import './pipeline/render.js';

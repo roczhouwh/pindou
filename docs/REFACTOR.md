@@ -265,8 +265,9 @@ generateGrid = function() { ... };        // 1278 ← 对函数声明重新赋�
 ```
 js/
 ├── core/
-│   ├── state.js          # state 声明 + 类型注释
+│   ├── state.js          # state 声明 + 类型注释 + **字段三类划分**（序列化边界，见 PLAN §3.6）
 │   ├── dom.js            # DOM 引用，按领域分组导出
+│   ├── serialize.js      # 图纸序列化/版本化地基（纯函数；PLAN 第三批 6a）
 │   └── helpers 类        # $ / $$ / clamp / isTouchDevice（现分散在 dom.js / a11y.js）
 ├── input/
 │   ├── upload.js         # handleFile / showError / showToast / 拖拽
@@ -305,6 +306,11 @@ js/
 > - **`state.rulerEnabled` 是显示偏好**，`handleFile()` **不重置**它。
 > - 三个坐标语义字段（`dragStartImage` / `dragStartClient` / `panStartPan`）**分别属于
 >   `selection.js` 与 `panzoom.js`** —— 拆开后正好各归其位，这正是步骤 3b 的价值。
+> - **`serialize.js` 属 `core/`、且是纯函数叶子**（PLAN 第三批 6a）：它
+>   **不 import `state`、不碰 DOM**，靠"传入网格、返回网格"与外界交互 ——
+>   这是它与 6b 存储选型解耦的方式。**不要在它里面写 `state`**；
+>   目前它**没有别的模块引用它**，唯一可达路径是 `main.js` 里那一条 import
+>   （`probe-verify-entry-chain.js` 与 `verify-browser-split.js` 双重守护）。
 
 **编排层（`main.js`）**：把当前隐式跨领域调用（`showViewer`、`#resetBtn`、
 `pointerup → generateGrid`）显式收拢到一处，**其余模块之间不允许互相直接调用**。
@@ -827,20 +833,20 @@ js/
 
 > 脚手架在仓库**之外**（`F:\claudeapp\demo\.pindou-devtools\`，刻意不污染零依赖交付物）。
 
-#### 模块清单（步骤 5 的产出 = 18 个；现 19 个）
+#### 模块清单（步骤 5 的产出 = 18 个；现 20 个）
 
 ```
-js/core/     dom.js      state.js                                     ← 2
+js/core/     dom.js      state.js     serialize.js                       ← 3（serialize.js 为 6a 新增）
 js/input/    camera.js   upload.js                                    ← 2
 js/viewer/   viewer.js   selection.js   panzoom.js                    ← 3
 js/pipeline/ render.js   simplify.js   grid.js                        ← 3
 js/output/   preview.js  stats.js      export.js    print.js          ← 4（print.js 为后续新增）
 js/ui/       a11y.js     grid-select.js  loading.js  install.js       ← 4
 js/main.js   ← 模块入口（静态 import 拉起整张图）                        ← 1
-                                                  合计 19 个 js/ 模块
+                                                  合计 20 个 js/ 模块
 ```
 > `color-palette.js` 在仓库根目录（不属于 `js/`），入口亦可达 ——
-> `probe-verify-entry-chain.js` 报的"共 20 个节点"即 19 + 它。
+> `probe-verify-entry-chain.js` 报的"共 21 个节点"即 20 + 它。
 
 > ⚠️ **ESM 后「加载顺序不能颠倒」这条约束已消失** ——
 > 依赖顺序由各模块的 `import` 语句表达，ESM 解析器负责拓扑排序。
@@ -867,6 +873,7 @@ node probe-verify-entry-chain.js
 # 突变测试（证明断言真的有约束力；会真实改动产品文件，跑完自动还原）
 node probe-simplify-mutation.js
 node probe-ruler-mutation.js
+node probe-serialize-mutation.js
 
 # 手工查看页面（⚠️ 必须经 HTTP，不能双击 —— ESM 受 CORS 限制）
 cd F:\claudeapp\demo\pindou
@@ -887,7 +894,8 @@ python -m http.server 8080     # 访问 http://localhost:8080
 | `probe-esm-real.js` | 步骤 0 的可行性证据 |
 | `probe-simplify-mutation.js` | **突变测试**：4 种"改回旧行为"必须让 `test-simplify.js` 转红 |
 | `probe-ruler-mutation.js` | **突变测试**：8 种"标尺改坏"必须让 `test-ruler.js` 转红 |
-| `verify-browser-split.js` | 真实 Chrome 端到端：页面仍完整可用 |
+| `probe-serialize-mutation.js` | **突变测试**：11 种"序列化改坏"必须让 `test-serialize.js` 转红（⚠️ 首轮抓出 1 个 no-op 突变 + 1 处覆盖缺口 + 1 个测试自身的编码 bug，见 PLAN §3.6） |
+| `verify-browser-split.js` | 真实 Chrome 端到端：页面仍完整可用（**8 条**，含"入口是否真的拉起 `serialize.js`"） |
 
 > **⚠️ 已标为"历史原型"、不要再运行的**（前提已消失，运行会明确跳过）：
 > `probe-src-index.js`、`probe-move-dryrun.js`。

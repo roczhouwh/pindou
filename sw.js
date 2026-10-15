@@ -32,7 +32,10 @@
 //      （独立 DOM 布局 + window.print()，与 PNG 导出并存）；
 //      index.html 新增 #printBtn / #printColorToggle / #printRoot，#printColorToggle
 //      关闭即 §4.5 的"省墨模式"
-const CACHE_NAME = 'pindou-v19';
+// v19：PLAN 第三批第 6 项 6a 序列化/版本化地基 —— 新增 js/core/serialize.js
+//      （纯函数：buildDoc / serializeDoc / parseDoc / docToGrid / deserializeDoc；
+//       不接 UI、不接 localStorage，故 index.html 无改动）
+const CACHE_NAME = 'pindou-v20';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -47,6 +50,7 @@ const ASSET_PATHS = [
   // （如 `Cannot access '$' before initialization`、`closeCamera is not defined`）。
   './js/core/dom.js',
   './js/core/state.js',
+  './js/core/serialize.js',
   './js/input/camera.js',
   './js/input/upload.js',
   './js/pipeline/render.js',

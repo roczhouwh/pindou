@@ -48,7 +48,8 @@ docs/REFACTOR.md    — 代码结构对策（模块划分、防复发规则、�
 docs/REVIEW.md      — 代码审查报告（37 项，已全部处理）+ 「已核实无问题」清单
 
 js/core/            dom.js      — $ / $$ / DOM 引用 / isTouchDevice
-                    state.js    — 常量 / state / viewerCtx / 主题同步
+                    state.js    — 常量 / state / viewerCtx / 主题同步 / **字段三类划分**（序列化边界）
+                    serialize.js— **图纸序列化/版本化地基**（纯函数；PLAN §3.6 / 第三批 6a）
 js/input/           upload.js   — handleFile / showError / showToast / 上传区监听
                     camera.js   — openCamera / capturePhoto / closeCamera
 js/viewer/          viewer.js   — computeImageRect / renderViewer / resizeViewerCanvas / scheduleViewerRedraw
@@ -377,6 +378,50 @@ PNG 里**没有物理尺寸**。52×52 走"100% 原始大小"是 78.7cm 宽、
 > **不要动 `findNearestColor()` 本身**：它是纯查询函数，在其中做阈值合并会让
 > "某个颜色永远选不到"，正确位置是 `applySimplify()` 的合并层。
 
+## 💾 序列化地基（改 `js/core/serialize.js` 前必读）
+
+`js/core/serialize.js` 是**纯函数层**：`buildDoc` / `serializeDoc` / `parseDoc` /
+`runMigrations` / `docToGrid` / `deserializeDoc`。**不写 `state`、不碰 DOM、不碰
+`localStorage`** —— 存储层与 UI 属于 PLAN 第三批 6b，故它与存储选型解耦。
+
+> **进度与方案见 [PLAN §3.6](docs/PLAN.md)。** 此处只列**长期有效的技术约束**。
+
+**四条硬约束**（`test-serialize.js` 18 条 + `probe-serialize-mutation.js` 11 种突变守护）：
+
+1. **格子身份用色号名（`"A10"`），不用色板下标。** 实测 104×104 序列化体积：
+   完整对象 584KB / 下标 32KB / **色号名约 65KB**。下标最省，但把存档**绑死到
+   `PERLER_PALETTE` 的排列顺序**上 —— 色板一增删重排，老存档就**静默变色且无法察觉**。
+   **不要为省 33KB 改回下标。**
+2. **`deserializeDoc()` 必须产出色板对象的副本**（逐个 `{ ...pal }`）。这是
+   「三重别名」缺陷（见下「近似色合并」末段与 [REVIEW.md](docs/REVIEW.md) n7）
+   的**第二次入口**：直接赋值会让存档格子与**全局色板**共享引用，
+   单元格编辑一上线就会改坏色板、污染后续所有生成的图。
+   > 📌 这里**刻意不复用** `simplify.js` 的 `cloneGrid()`：本模块已直接产出副本，
+   > 再套一层是多余遍历；且 `js/core/` → `js/pipeline/` 会**新增跨领域 import 边**，
+   > 而规则 2（模块间不得直接互相调用）是**已记录的待办，不是可扩散的先例**。
+3. **版本校验四层缺一不可**：语法 → 身份（`format` **与** `version`）→ 迁移 → 结构。
+   只查 `version` 挡不住"别的应用的 JSON 恰好有 `version: 1`"；
+   **版本过新必须拒绝**（强行读入会**静默丢字段**，明确拒绝优于静默损坏）。
+   迁移**逐级升级**（v1→v2→v3），不写跳级函数（数量随版本数平方增长）。
+4. **未知色号 → 该格留空 + `warnings` 如实告知，不猜近似色。** 猜色会让用户按图买的
+   色号与实际不符，比留空更难发现（同「近似色合并」必须播报替代色号的一贯要求）。
+
+**`state` 字段三类划分**（写在 `js/core/state.js` 注释里，**新增字段必须归类**）。
+判据只有一句：**"换一台设备打开，这个值还应不应该一样？"**
+
+| 类 | 成员 | 入档 | `handleFile()` |
+|---|---|---|---|
+| ① **图纸文档** | **只有 `gridData`**（行列数由它的维度导出，不另存） | ✅ | 归零 |
+| ② **显示/输出偏好** | `rulerEnabled`、`printColorBlocks` | ❌ | **刻意不重置** |
+| ③ **临时视图/交互态** | `simplify`（图像参数，**必须归零**）+ 其余全部 | ❌ | 见左 |
+
+> ⚠️ **②与③的区别是历史缺陷的来源**（`simplify` 曾不归零 → REVIEW.md C1）。
+> 判据：是"**对图片的变换**"（须归零）还是"**用户怎么看**"（不重置）。
+
+> ⚠️ **两个已确认接受的后果**（6b 不要偷偷补回来）：`simplify` 不入档 ⇒
+> 加载后**无法复现当初的简化强度**；`rawGridData` 不入档 ⇒ 它是"**采样**原始值"的语义，
+> **不是**"加载出来的图纸的原始值"。**加载存档后简化滑块该可用还是该禁用是 6b 的产品决策。**
+
 ## PWA 相关
 
 - `manifest.json`：standalone 模式，indigo 主题色
@@ -462,8 +507,11 @@ python3 -m http.server 8080
 > **完整清单、优先级排序、执行进度与实施方案见 [docs/PLAN.md](docs/PLAN.md)**。
 > 本节**仅保留索引**，避免两份清单各自漂移。
 
-**尚未开工**：**序列化地基 → 网格保存/加载 → 单元格编辑 + 撤销/重做**（下一轮入口，见
-[PLAN §5.1](docs/PLAN.md) 开头的「🚪 下一轮从这里开始」与 §3.4）、抖动算法、分块渲染。
+**进行中**：**网格保存/加载 → 单元格编辑 + 撤销/重做**（下一轮入口 = **6b 网格保存/加载**，见
+[PLAN §5.1](docs/PLAN.md) 开头的「🚪 下一轮从这里开始」、§3.4、§3.6）。
+> ✅ **6a 序列化地基已完成**（`js/core/serialize.js`，见上「序列化地基」小节与 PLAN §3.6）。
+
+**尚未开工**：抖动算法、分块渲染。
 
 **已搁置**：多品牌色板支持（依赖色板抽象，成本主要在数据可靠性）、
 色板自定义编辑（依赖最多、风险最高，需版本化）、
