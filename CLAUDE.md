@@ -50,20 +50,23 @@ docs/REVIEW.md      — 代码审查报告（37 项，已全部处理）+ 「已
 js/core/            dom.js      — $ / $$ / DOM 引用 / isTouchDevice
                     state.js    — 常量 / state / viewerCtx / 主题同步 / **字段三类划分**（序列化边界）
                     serialize.js— **图纸序列化/版本化地基**（纯函数；PLAN §3.6 / 第三批 6a）
+                    storage.js  — **存档存储层**（localStorage 多份管理；PLAN §3.7 / 第三批 6b）
 js/input/           upload.js   — handleFile / showError / showToast / 上传区监听
                     camera.js   — openCamera / capturePhoto / closeCamera
 js/viewer/          viewer.js   — computeImageRect / renderViewer / resizeViewerCanvas / scheduleViewerRedraw
                     selection.js— updateSelectionBox / 选框拖拽
                     panzoom.js  — 右键平移 / 滚轮 / 双指 / 窗口尺寸
 js/pipeline/        render.js   — drawGrid / drawRuler / rulerMetrics / pickTextColor / FONT_STACK
-                    simplify.js — applySimplify / getStaticMergeMap / cloneGrid
-                    grid.js     — generateGrid / generateGridCore
+                    simplify.js — applySimplify / getStaticMergeMap / cloneGrid / rebuildColorCounts
+                    grid.js     — generateGrid / generateGridCore / **adoptGrid**（接管外部图纸）
 js/output/          preview.js  — fitPreviewGrid / renderPreview
                     stats.js    — renderStats
                     export.js   — computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
                     print.js    — encodeCellName / computePrintPaging / renderPrintLayout / printGrid（A4 打印出口）
 js/ui/              a11y.js     — announce / markActiveGridBtn / 键盘通路 / clamp
                     grid-select.js — 网格预设 / 自定义 / 简化滑块 / 标尺开关
+                                     + **setSamplingControlsEnabled**（无原图时置灰）
+                    library.js  — **存档 UI**（保存/载入/删除 + **无原图展示路径**；PLAN §3.7）
                     loading.js  — showLoading / hideLoading
                     install.js  — PWA 安装提示
 js/main.js          — **模块入口**（ESM 单入口）
@@ -203,6 +206,11 @@ js/main.js          — **模块入口**（ESM 单入口）
 - **极端比例提示**：内容短边格数过少时（量化偏差 > 8%）在预览信息处如实警告
 - **拍照上传**：移动端显示拍照按钮，调用原生相机
 - **分享**：支持 Web Share API 的设备可分享 PNG 文件
+- **图纸存档**：把图纸以**名字**存进本机浏览器（`localStorage`），可多份、可载入、可删除。
+  存档**只含图纸本身**（色号 + 空格），**不含原图 / 选框 / 简化强度**。
+  ⚠️ 载入存档后进入「**无原图模式**」：原图被清空，网格尺寸与颜色简化**禁用**并给出说明
+  （横幅 `#archiveBanner`）—— 详见下方「存档存储层与无原图模式」。
+  **删除必须先确认**（不可撤销）；配额不足 / 存储不可用分别给出**不同**的可操作提示
 - **A4 打印**：「🖨 打印 A4」按钮走**独立 DOM 布局 + `window.print()`**（与 PNG 导出并存）。
   每页 52 列、每格 3.846mm、色号 6.2pt；52×52 ⇒ **1 页**，104×104 ⇒ **4 页**（2×2 拼接，
   页眉标注"第 N/4 页 · 第 X 行第 Y 块 · 列 a-b / 行 c-d"）。点之前屏幕上先给出页数与每格尺寸。
@@ -382,7 +390,8 @@ PNG 里**没有物理尺寸**。52×52 走"100% 原始大小"是 78.7cm 宽、
 
 `js/core/serialize.js` 是**纯函数层**：`buildDoc` / `serializeDoc` / `parseDoc` /
 `runMigrations` / `docToGrid` / `deserializeDoc`。**不写 `state`、不碰 DOM、不碰
-`localStorage`** —— 存储层与 UI 属于 PLAN 第三批 6b，故它与存储选型解耦。
+`localStorage`** —— 存储层与 UI 是下一层（`js/core/storage.js` + `js/ui/library.js`），
+故它与存储选型解耦。
 
 > **进度与方案见 [PLAN §3.6](docs/PLAN.md)。** 此处只列**长期有效的技术约束**。
 
@@ -418,9 +427,60 @@ PNG 里**没有物理尺寸**。52×52 走"100% 原始大小"是 78.7cm 宽、
 > ⚠️ **②与③的区别是历史缺陷的来源**（`simplify` 曾不归零 → REVIEW.md C1）。
 > 判据：是"**对图片的变换**"（须归零）还是"**用户怎么看**"（不重置）。
 
-> ⚠️ **两个已确认接受的后果**（6b 不要偷偷补回来）：`simplify` 不入档 ⇒
+> ⚠️ **两个已确认接受的后果**：`simplify` 不入档 ⇒
 > 加载后**无法复现当初的简化强度**；`rawGridData` 不入档 ⇒ 它是"**采样**原始值"的语义，
-> **不是**"加载出来的图纸的原始值"。**加载存档后简化滑块该可用还是该禁用是 6b 的产品决策。**
+> **不是**"加载出来的图纸的原始值"。
+> **已决（6b 的产品决策）**：加载存档后简化滑块**禁用**，并在界面上说明原因 ——
+> 见下「存档存储层与无原图模式」。
+
+## 💾 存档存储层与无原图模式（改 `js/core/storage.js` / `js/ui/library.js` 前必读）
+
+三层分工，**不要互相越界**：
+
+| 模块 | 职责 | 边界 |
+|---|---|---|
+| `js/core/serialize.js` | 存**什么**、怎么版本化 | 纯函数，**不写 `state`、不碰 DOM、不碰 `localStorage`** |
+| `js/core/storage.js` | 存到**哪**、多份怎么管理 | **不碰 DOM、不写 `state`**（用 `storage.js` 里叫 `state` 的局部变量也不行 —— 见下） |
+| `js/ui/library.js` | 按钮/列表/提示 + **载入后的界面切换** | 不自己拼格式、不自己拼网格 |
+
+**四条硬约束**（`test-library.js` 24 条 + `probe-library-mutation.js` 17 种突变守护）：
+
+1. **整份存档集写在**一个键里（`pindou-library`），不是"一份图纸一个键 + 索引键"。
+   后者**没有原子性**：写内容成功、写索引失败就留下"索引指向不存在的图纸"，
+   且**只有用户下次打开才暴露**。单键方案下一次 `setItem` 就是一次原子提交，
+   配额不足时旧存档**逐字节保持原样**。
+2. **`available`（能读）与 `writable`（能写）是两个独立的量**，不要合并 ——
+   ⚠️ 实测踩到：合并后空间一满就报"本浏览器不允许使用本地存储"（该换浏览器？）
+   而且**用户看不到也删不掉自己的存档**，唯一能腾空间的动作被自己封死了。
+   正确行为：写满时**列表与删除照常可用**，提示明确指向"删掉几份再存"
+   （删除写回的数据一定更小，配额模型下必然成功）。
+3. **损坏时不许覆盖**：键里内容读不懂时如实报告并**暂停保存**，坏内容原样留着。
+   "清空重来"会把用户唯一的副本抹掉且不可恢复。代价（已接受）：损坏后用户需自行
+   清理站点数据才能继续存。
+4. **载入路径不重建 `rawGridData`**，且**必须清空**它 ——
+   它的语义是"**采样**原始值"，存档里没有；留着上一张图的值，用户一动简化滑块
+   （键盘/脚本仍可触发）就会把当前图纸换成旧图的采样结果。
+   `adoptGrid()` 里因此**不调用 `applySimplify()`**，统计由
+   `rebuildColorCounts(gridData)` 按网格本身重建。
+
+**无原图模式**（6b 的产品决策，**改控件显隐逻辑前必读**）：
+
+- 载入存档 ⇒ **清空原图**（存档不含选框，保留会让"选框框住的区域"与图纸内容矛盾）；
+- 依赖**原图重新采样**的控件**逐个** `disabled`（`setSamplingControlsEnabled(false)`）：
+  网格预设、自定义宽高、`#applyCustom`、简化滑块。
+  ⚠️ **必须真设 `disabled`**，只加样式挡不住键盘与脚本触发。
+- 与图纸无关的偏好（`rulerEnabled` / `printColorBlocks`）**刻意不禁用**；
+- **必须显示 `#archiveBanner` 说明原因**（只置灰 = 用户以为工具坏了）；
+- 恢复的唯一入口是 **`showViewer()`**（任何载入原图的路径都必经此处）——
+  在那里调 `exitArchiveMode()`，不要在各条分支上分别复位（会漏）。
+
+> ⚠️ **打印时必须隐藏 `.archive-section`**：`@media print` 的隐藏清单里**每新增
+> 一个屏幕分区都要补一条**，否则存档的输入框/下拉框会被印到纸上
+> （实测踩到，靠截图发现；`test-library.js` 有断言逐个核对）。
+
+> ⚠️ **jsdom 的 `localStorage` 是 Proxy**：`localStorage.setItem = fn` **不生效**
+> （实例属性赋值被吞掉），用它模拟"配额不足"会让保存照样成功、测试**假红**。
+> 必须把 `globalThis.localStorage` **整个换掉**（见 `test-library.js` 的两个桩）。
 
 ## PWA 相关
 
@@ -507,9 +567,11 @@ python3 -m http.server 8080
 > **完整清单、优先级排序、执行进度与实施方案见 [docs/PLAN.md](docs/PLAN.md)**。
 > 本节**仅保留索引**，避免两份清单各自漂移。
 
-**进行中**：**网格保存/加载 → 单元格编辑 + 撤销/重做**（下一轮入口 = **6b 网格保存/加载**，见
-[PLAN §5.1](docs/PLAN.md) 开头的「🚪 下一轮从这里开始」、§3.4、§3.6）。
+**进行中**：**单元格编辑 + 撤销/重做**（下一轮入口 = **6c 单元格编辑**，见
+[PLAN §5.1](docs/PLAN.md) 开头的「🚪 下一轮从这里开始」、§3.4、§3.7）。
 > ✅ **6a 序列化地基已完成**（`js/core/serialize.js`，见上「序列化地基」小节与 PLAN §3.6）。
+> ✅ **6b 网格保存/加载已完成**（`js/core/storage.js` + `js/ui/library.js`，
+> 见上「存档存储层与无原图模式」小节与 PLAN §3.7）。
 
 **尚未开工**：抖动算法、分块渲染。
 

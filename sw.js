@@ -35,7 +35,11 @@
 // v19：PLAN 第三批第 6 项 6a 序列化/版本化地基 —— 新增 js/core/serialize.js
 //      （纯函数：buildDoc / serializeDoc / parseDoc / docToGrid / deserializeDoc；
 //       不接 UI、不接 localStorage，故 index.html 无改动）
-const CACHE_NAME = 'pindou-v20';
+// v20：PLAN 第三批第 6b 网格保存/加载 —— 新增 js/core/storage.js（localStorage
+//      多份管理：命名/删除/配额失败/损坏时不覆盖）+ js/ui/library.js（存档 UI
+//      + **无原图展示路径**）；index.html 新增 #archiveSection（独立于上传区）
+//      与 #archiveBanner（载入存档后说明"为什么控件灰了"）
+const CACHE_NAME = 'pindou-v21';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -51,6 +55,7 @@ const ASSET_PATHS = [
   './js/core/dom.js',
   './js/core/state.js',
   './js/core/serialize.js',
+  './js/core/storage.js',
   './js/input/camera.js',
   './js/input/upload.js',
   './js/pipeline/render.js',
@@ -65,6 +70,7 @@ const ASSET_PATHS = [
   './js/output/print.js',
   './js/ui/a11y.js',
   './js/ui/grid-select.js',
+  './js/ui/library.js',
   './js/ui/loading.js',
   './js/ui/install.js',
   './js/main.js',

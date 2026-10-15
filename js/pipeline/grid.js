@@ -1,10 +1,10 @@
 import { findNearestColor } from '../../color-palette.js';
-import { $, downloadBtn, offscreenCanvas, printBtn } from '../core/dom.js';
+import { $, downloadBtn, offscreenCanvas, printBtn, saveArchiveBtn } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { showToast } from '../input/upload.js';
 import { renderPreview } from '../output/preview.js';
 import { renderStats } from '../output/stats.js';
-import { applySimplify, cloneGrid } from './simplify.js';
+import { applySimplify, cloneGrid, rebuildColorCounts } from './simplify.js';
 import { announce, clamp } from '../ui/a11y.js';
 import { hideLoading, showLoading } from '../ui/loading.js';
 
@@ -239,6 +239,66 @@ export function generateGridCore() {
   // 故启用时机与 downloadBtn 完全一致。⚠️ 漏了这一行 ⇒ 按钮永远灰色，
   // 用户观感就是"打印功能没做"（与 export.js 漏装配等价的表现）。
   printBtn.disabled = false;
+  // 保存图纸（PLAN 第三批 6b）同理：它的前提同样是"已有一张图纸"
+  saveArchiveBtn.disabled = false;
   // 播报生成结果：读屏用户此前对"图纸已生成"完全无感（见 REVIEW.md M5）
   announce(`图纸已生成：${gw}×${gh} 网格，${state.colorCounts ? state.colorCounts.length : 0} 种颜色`);
+}
+
+/**
+ * **接管一份外部图纸**（载入存档、或将来的其它来源）：把网格装进 `state`，
+ * 并走一遍与"图片生成"**完全相同**的收尾（统计 / 预览 / 按钮启用 / 播报）。
+ *
+ * ⚠️ 为什么必须抽这个函数、而不在 UI 层照抄一遍收尾：
+ *    `generateGridCore` 的收尾有 6 件事（rebuild 统计、预览、3 个按钮启用、播报），
+ *    抄第二份的后果是**两处各自漂移** —— 典型表现就是"打印按钮在载入存档后是灰的"
+ *    这类只有用户能撞见的缺陷（本仓库对"装配代码漏搬"有专门记录，
+ *    见 export.js 里 downloadBtn 那两行）。故收尾只有一份实现。
+ *
+ * ⚠️ 与图片路径的**唯一差异**是 `applySimplify()` 不能被调用：
+ *    存档按 6a 的定案只含图纸本身，`rawGridData` **不入档**（它语义是"**采样**的
+ *    原始值"，不是"载入出来的图纸的原始值"）。直接调 `applySimplify()`
+ *    会因为它读 `state.rawGridData` 为 null 而**静默空转**，留下一个
+ *    "预览已更新、统计却还是上一张图"的不一致状态。
+ *    所以这里显式把 grid 同时作为 `gridData` 与统计的来源 —— 统计**必须**由
+ *    grid 本身重建，不能沿用上一张图的 `colorCounts`。
+ *
+ * ⚠️ 顺带把 `rawGridData` 置空并**由 UI 禁用简化滑块**（6b 的产品决策）：
+ *    留着旧图的 raw 数据会让滑块一动就把存档图纸换成上一张图的采样结果 ——
+ *    这是"改了 A 弄坏 B"里最难查的一种（数据看着来自当前图，其实不是）。
+ *
+ * @param {Array<Array<object|null>>} grid 二维网格（元素为 `{name,hex,r,g,b}` 或 null）
+ * @returns {{rows:number, cols:number}} 实际接管的尺寸
+ */
+export function adoptGrid(grid) {
+  if (!Array.isArray(grid) || grid.length === 0 || !Array.isArray(grid[0])) {
+    throw new Error('adoptGrid: 网格数据不合法');
+  }
+  const rows = grid.length;
+  const cols = grid[0].length;
+
+  // ⚠️ 再拷一份：调用方（storage.js）已经产出副本，但本函数是**公开入口**，
+  //    将来别的来源（如用户手改的 JSON）未必拷贝 —— 就地编辑一上线，
+  //    不拷贝就会把来源对象与全局色板一起改坏（PLAN §3.4 / REVIEW.md n7）。
+  state.gridData = cloneGrid(grid);
+  state.gridW = cols;
+  state.gridH = rows;
+  // 见上方说明：rawGridData 是"采样原始值"的语义，载入路径**没有**它
+  state.rawGridData = null;
+  state.rawColorCounts = null;
+  // 极端比例提示是"采样"环节的产物，载入的图纸没有经过采样 ⇒ 必须清掉，
+  // 否则会挂着上一张图的警告文本
+  state.aspectWarning = null;
+  // 载入的图纸没有经过近似色合并 ⇒ 合并告知也必须清掉（否则复用上一张图的文案）
+  state.mergedColors = [];
+  // 统计由**网格本身**重建（不是 applySimplify 的那条路径，理由见 JSDoc）
+  state.colorCounts = rebuildColorCounts(state.gridData);
+
+  renderPreview();
+  renderStats();
+  downloadBtn.disabled = false;
+  printBtn.disabled = false;
+  saveArchiveBtn.disabled = false;
+  announce(`已载入图纸：${cols}×${rows} 网格，${state.colorCounts.length} 种颜色`);
+  return { rows, cols };
 }

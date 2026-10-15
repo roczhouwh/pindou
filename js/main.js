@@ -8,6 +8,7 @@
 //     core/     dom.js        —— $ / $$ / DOM 引用 / isTouchDevice
 //               state.js      —— 常量 / state / viewerCtx / 主题同步
 //               serialize.js  —— 图纸序列化/版本化地基（PLAN 第三批 6a；纯函数，不写 state）
+//               storage.js    —— 图纸存档存储层（PLAN 第三批 6b；localStorage 多份管理，不碰 DOM）
 //     input/    upload.js     —— handleFile / showError / showToast / 上传区监听
 //               camera.js     —— openCamera / capturePhoto / closeCamera
 //     viewer/   viewer.js     —— computeImageRect / renderViewer / resizeViewerCanvas …
@@ -21,6 +22,8 @@
 //               export.js     —— computeDownloadSize / renderDownloadCanvas / downloadPNG …
 //     ui/       a11y.js       —— announce / markActiveGridBtn / 键盘通路 / clamp
 //               grid-select.js—— 网格预设 / 自定义 / 简化滑块 / 标尺开关
+//                                + setSamplingControlsEnabled（6b：无原图时置灰）
+//               library.js    —— 图纸存档 UI（PLAN 第三批 6b：保存/载入/删除 + 无原图展示路径）
 //               loading.js    —— showLoading / hideLoading
 //               install.js    —— PWA 安装提示
 //
@@ -60,10 +63,13 @@
 // 所以这里**不需要**再写任何编排代码 —— 见上方「本文件当前不承载逻辑」。
 import './core/dom.js';
 import './core/state.js';
-// 序列化地基（PLAN 第三批 6a）：目前**没有模块引用它**（6b 的保存/加载 UI 才会接上），
-// 因此这一条 import 是它唯一的可达路径 —— 漏了它，该文件永远不会被浏览器请求。
-// 这也是 `probe-verify-entry-chain.js` 守护的那条规则。
+// 序列化地基（PLAN 第三批 6a）：纯函数层，被 6b 的 storage.js 引用，
+// 因此即使不写这一条它也是可达的 —— 但**保留显式一条**（与下面的 storage.js 同理）：
+// 入口的 import 列表是"页面会加载哪些文件"的真源，让人一眼看全比省一行重要。
 import './core/serialize.js';
+// 图纸存档存储层（PLAN 第三批 6b / js/core/storage.js）：
+// 它被 js/ui/library.js 引用，故可达；此处仍显式列一条，理由同上。
+import './core/storage.js';
 import './input/camera.js';
 import './input/upload.js';
 import './pipeline/render.js';
@@ -78,6 +84,12 @@ import './output/export.js';
 import './output/print.js';
 import './ui/a11y.js';
 import './ui/grid-select.js';
+// 图纸存档界面层（PLAN 第三批 6b / js/ui/library.js）：
+// ⚠️ **它是本模块唯一的"装配入口"** —— 没有任何别的模块 import 它
+//    （它是 UI 叶子：按钮监听与初始化都在它自己顶层），
+//    所以**漏了这一条它永远不会被浏览器请求**，页面表现为"存档功能完全不存在"。
+//    这条规则由 `probe-verify-entry-chain.js` 与 `verify-browser-split.js` 双重守护。
+import './ui/library.js';
 import './ui/loading.js';
 import './ui/install.js';
 

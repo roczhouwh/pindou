@@ -88,6 +88,70 @@ body {
   margin-top: 4px;
 }
 
+/* --- 图纸存档（PLAN 第三批 6b） ---
+   与其它分区同构：白底卡片 + 圆角 + 边框。
+   ⚠️ 本区**必须独立于 .upload-section**（不是它的子元素）：
+   showViewer() 会隐藏上传区，而"载入存档"在上传之前就得可用（存档不含原图）。 */
+.archive-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.archive-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.archive-name,
+.archive-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  min-width: 0;
+}
+
+.archive-name { flex: 1 1 180px; max-width: 260px; }
+.archive-select { flex: 1 1 180px; max-width: 300px; }
+
+.archive-name:focus,
+.archive-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+
+.archive-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 存档模式横幅（载入存档后原图已清空 ⇒ 依赖重新采样的控件不可用）。
+   ⚠️ 用左侧色条 + 文字说明，不只用颜色：必须让用户知道"为什么灰了"，
+   否则一片灰控件会被当成故障（本仓库要求"静默失效不可接受"）。 */
+.archive-banner {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--primary-light);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
 /* --- Main Layout --- */
 .main {
   max-width: 960px;
@@ -368,6 +432,47 @@ body {
 /* .control-label 默认 text-transform: uppercase，中文无影响；此处仅去掉 letter-spacing 观感更紧凑 */
 .ruler-toggle .control-label {
   letter-spacing: 0.02em;
+}
+
+/* --- 禁用态样式（PLAN 第三批 6b 补） ---
+   ⚠️ **本节是 6b 才补上的**：此前只有 `.btn-primary:disabled` 一条，
+   而 6b 的"无原图模式"会**批量禁用**网格预设 / 自定义输入 / 「应用」/ 简化滑块 ——
+   实测截图发现：`<button>` 与 `<input>` 的默认禁用外观在这套自定义样式下**看不出来**，
+   于是"横幅说它们不可用、控件却看着好好的"，用户只会以为点了没反应。
+   （禁用态必须是**用户看得见**的信息，不能只在代码里 `disabled = true`。）
+
+   统一用「降不透明度 + 禁用光标」，且**不改布局**（尺寸/间距不变，
+   避免禁用/启用切换时界面跳动）。 */
+.grid-btn:disabled,
+.custom-input:disabled,
+.btn:disabled,
+.archive-name:disabled,
+.archive-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 禁用时不要保留 hover 反馈 —— 会让人以为还能点
+   （.btn 与 .grid-btn 的 hover 都有变色规则，这里显式压掉） */
+.grid-btn:disabled:hover,
+.btn:disabled:hover {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* 当前网格尺寸的按钮在禁用时仍保留 active 底色（那是**信息**：图纸就是这个尺寸），
+   但同样压暗，以免看起来像"可以点它切换"。 */
+.grid-btn.active:disabled {
+  opacity: 0.7;
+}
+
+/* 简化滑块禁用时把读数一并压暗：读数说的是"需原图"，与控件状态同向 */
+.simplify-control input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.simplify-control input[type="range"]:disabled + .simplify-value {
+  opacity: 0.7;
 }
 
 /* --- Buttons --- */
@@ -866,6 +971,10 @@ body {
   @page { size: A4; margin: 5mm; }
 
   /* ---- 屏幕 UI 全部隐藏：只留打印版面 ---- */
+  /* ⚠️ **每新增一个屏幕上的分区，都必须加进这个清单**（PLAN 第三批 6b 实测踩到）：
+      新增 `.archive-section` 时漏加了它，打印纸上就会多出存档区的
+      输入框、下拉框与「保存/载入/删除」按钮 —— 而这是**要拿去买豆照着拼**的图纸。
+      清单在 `test-library.js` 里有一条断言逐个核对（不靠人眼记）。 */
   /* ⚠️ 这里**刻意不列**那个「读屏专用隐藏类」（1×1px + overflow:hidden 的那个）：
      它在纸上本来就不可能看见；给它再加一条 display 声明会**多出第二处**
      对同一件事的声明，与既有的 `[hidden] { display:none !important }` 形成双份维护 ——
@@ -875,6 +984,7 @@ body {
         写成那样会被自己的注释误判成违规（本轮实测踩到）。 */
   .header,
   .upload-section,
+  .archive-section,
   .viewer-section,
   .controls-section,
   .preview-section,

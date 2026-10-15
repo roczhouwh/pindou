@@ -268,6 +268,7 @@ js/
 │   ├── state.js          # state 声明 + 类型注释 + **字段三类划分**（序列化边界，见 PLAN §3.6）
 │   ├── dom.js            # DOM 引用，按领域分组导出
 │   ├── serialize.js      # 图纸序列化/版本化地基（纯函数；PLAN 第三批 6a）
+│   ├── storage.js        # 图纸存档存储层（localStorage 多份管理；PLAN 第三批 6b）
 │   └── helpers 类        # $ / $$ / clamp / isTouchDevice（现分散在 dom.js / a11y.js）
 ├── input/
 │   ├── upload.js         # handleFile / showError / showToast / 拖拽
@@ -288,6 +289,8 @@ js/
 ├── ui/
 │   ├── a11y.js           # announce / markActiveGridBtn / 键盘通路 / clamp
 │   ├── grid-select.js    # 网格预设 / 自定义 / 简化滑块 / 标尺开关
+│   │                     #   + setSamplingControlsEnabled（无原图模式置灰，PLAN §3.7）
+│   ├── library.js        # 图纸存档 UI：保存/载入/删除 + **无原图展示路径**（PLAN §3.7）
 │   ├── loading.js        # showLoading / hideLoading
 │   └── install.js        # PWA 安装提示
 └── main.js               # 编排层入口（⚠️ 现状：只拉起模块图，尚未承载逻辑）
@@ -296,6 +299,9 @@ js/
 > **⚠️ 搬迁时已确认的关键约束**：
 > - `generateGrid()` 与 `generateGridCore()` **必须同模块** —— 前者是入口（驱动遮罩 + rAF），
 >   后者是纯实现。跨模块导入后**不可再重新赋值**（§7.2 情形 C）。
+> - **`adoptGrid()` 与它们同属 `grid.js`**（PLAN 第三批 6b）：它接管外部图纸并复用
+>   *同一份收尾*（统计/预览/三按钮启用/播报）。**不要把收尾抄到 UI 层** ——
+>   两份收尾必然漂移，典型表现是"载入后某个按钮还是灰的"。
 > - `computeImageRect(w, h)` **必须保留 `w/h` 参数**，不可在模块内自取尺寸。
 > - `drawGrid()` 的 **4 个差异开关必须原样传递**，`render.js` 不预设默认值。
 > - **`drawRuler()` 只画边距区域**，网格本体仍归 `drawGrid()` ——
@@ -307,10 +313,19 @@ js/
 > - 三个坐标语义字段（`dragStartImage` / `dragStartClient` / `panStartPan`）**分别属于
 >   `selection.js` 与 `panzoom.js`** —— 拆开后正好各归其位，这正是步骤 3b 的价值。
 > - **`serialize.js` 属 `core/`、且是纯函数叶子**（PLAN 第三批 6a）：它
->   **不 import `state`、不碰 DOM**，靠"传入网格、返回网格"与外界交互 ——
->   这是它与 6b 存储选型解耦的方式。**不要在它里面写 `state`**；
->   目前它**没有别的模块引用它**，唯一可达路径是 `main.js` 里那一条 import
->   （`probe-verify-entry-chain.js` 与 `verify-browser-split.js` 双重守护）。
+>   **不 import `state`、不碰 DOM、不碰 `localStorage`**，靠"传入网格、返回网格"与外界交互。
+>   **不要在它里面写 `state`**（PLAN 第三批 6b 已补上调用方 `storage.js`）。
+> - **`storage.js` 同属 `core/`、同样不碰 DOM 与 `state`**（PLAN 第三批 6b）：
+>   它只管"存到哪、多份怎么管理"。**不要在它里面调 DOM 或渲染** ——
+>   那是 `js/ui/library.js` 的事；这样换成 IndexedDB 时 UI 与 `serialize.js` 都不用改。
+>   > ⚠️ 连**局部变量都不要叫 `state`**：本文件的一个卖点就是"不写 `state`"，
+>   > 有个同名局部变量会让"到底碰没碰全局 state"无法靠阅读与静态检查判断
+>   > （`test-library.js` 有对应的静态判据，突变⑫⑬ 守护其行为侧）。
+> - **`library.js` 是 `ui/` 下的叶子，唯一的装配入口是 `main.js`**（同 `serialize.js`）：
+>   它没有被别的模块 import，**漏了 `main.js` 里那条 import 就整块功能不存在**。
+> - **存档模式（无原图）的退出点只有一个：`showViewer()`**。它调用
+>   `exitArchiveMode()`；**不要在各条分支上分别复位**（分支一多必漏，
+>   表现为"上传了新图但控件还是灰的"）。
 
 **编排层（`main.js`）**：把当前隐式跨领域调用（`showViewer`、`#resetBtn`、
 `pointerup → generateGrid`）显式收拢到一处，**其余模块之间不允许互相直接调用**。

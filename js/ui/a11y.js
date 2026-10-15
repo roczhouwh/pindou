@@ -1,6 +1,7 @@
-import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, printBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
+import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, printBtn, saveArchiveBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
 import { state, viewerCtx } from '../core/state.js';
 import { generateGrid } from '../pipeline/grid.js';
+import { exitArchiveMode } from './library.js';
 import { resetSimplify } from './grid-select.js';
 import { updateSelectionBox } from '../viewer/selection.js';
 import { renderViewer, resizeViewerCanvas } from '../viewer/viewer.js';
@@ -111,6 +112,7 @@ $('#resetBtn').addEventListener('click', () => {
   state.rawGridData = null;
   state.rawColorCounts = null;
   state.mergedColors = [];
+  state.aspectWarning = null;
   // 简化强度与网格尺寸回到默认，避免影响下一张图（C1 / m12）
   resetSimplify();
   state.gridW = 29;
@@ -127,6 +129,11 @@ $('#resetBtn').addEventListener('click', () => {
   downloadBtn.disabled = true;
   // 打印出口同上：重置后必须回到禁用态，否则用户能对**已清空的图纸**唤起打印
   printBtn.disabled = true;
+  // 保存图纸（6b）同理：没有图纸就没有可保存的东西
+  saveArchiveBtn.disabled = true;
+  // 存档模式也要退出（6b）：重置是"回到最初"，此时既无原图也无图纸，
+  // 留着"已载入存档…"的横幅与置灰控件会与界面对不上
+  exitArchiveMode();
   fileInput.value = '';
 });
 

@@ -1,6 +1,7 @@
 import { controlsSection, downloadBtn, isTouchDevice, previewSection, printBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerHint, viewerHint2, viewerHint3, viewerHint4, viewerSection, viewerWrapper } from '../core/dom.js';
 import { state, viewerCtx } from '../core/state.js';
 import { generateGrid } from '../pipeline/grid.js';
+import { exitArchiveMode } from '../ui/library.js';
 import { updateSelectionBox } from './selection.js';
 
 // ============================================================
@@ -80,6 +81,11 @@ export function showViewer() {
   downloadBtn.disabled = true;
   // 打印出口与 PNG 导出同启用时机（PLAN §4.2）：新图尚未生成图纸，两者都必须禁用
   printBtn.disabled = true;
+  // 存档模式在此退出（PLAN 第三批 6b）：showViewer 是**任何**载入原图路径的
+  // 唯一必经之处（handleFile 只在这里收尾），收在这里才不会漏掉某条分支。
+  // ⚠️ 漏了它的表现是"上传了新图，但网格尺寸按钮与简化滑块仍是灰的、
+  //    横幅还挂着上一份存档的说明"——只有用户能撞见。
+  exitArchiveMode();
   viewerHint.hidden = false;
   viewerHint2.hidden = isTouchDevice;
   viewerHint3.hidden = !isTouchDevice;

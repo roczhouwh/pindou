@@ -49,6 +49,15 @@ export const applyCustom = $('#applyCustom');
 export const simplifySlider = $('#simplifySlider');
 export const simplifyValue = $('#simplifyValue');
 export const rulerToggle = $('#rulerToggle');
+// ---- 图纸存档（PLAN 第三批 6b / js/ui/library.js）----
+export const archiveSection = $('#archiveSection');
+export const archiveName = $('#archiveName');
+export const archiveSelect = $('#archiveSelect');
+export const archiveHint = $('#archiveHint');
+export const archiveBanner = $('#archiveBanner');
+export const saveArchiveBtn = $('#saveArchiveBtn');
+export const loadArchiveBtn = $('#loadArchiveBtn');
+export const deleteArchiveBtn = $('#deleteArchiveBtn');
 export const cameraInput = $('#cameraInput');
 export const cameraBtn = $('#cameraBtn');
 export const shareBtn = $('#shareBtn');

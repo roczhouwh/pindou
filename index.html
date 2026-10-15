@@ -59,6 +59,31 @@
       <p class="upload-error" id="uploadError" hidden></p>
     </section>
 
+    <!-- ====== 图纸存档（PLAN 第三批 6b） ======
+         ⚠️ 本区**刻意独立于 #uploadSection**（不是它的子元素）：
+         showViewer() 会把 #uploadSection 整体 hidden，而"载入一份存档"
+         必须在上传图片**之前**就能用 —— 存档按 6a 的定案只含图纸本身、不含原图，
+         所以「打开页面 → 直接载入存档 → 查看/导出/打印」是一条完整且必要的路径。 -->
+    <section class="archive-section" id="archiveSection">
+      <h2 class="section-title">图纸存档</h2>
+      <div class="archive-row">
+        <!-- 与 #customW 同例：用 aria-label 提供可访问名称（用 placeholder 当名字会在输入后消失） -->
+        <input type="text" id="archiveName" class="archive-name" maxlength="40"
+               autocomplete="off" placeholder="给这份图纸起个名字"
+               aria-label="存档名称">
+        <button class="btn btn-sm" id="saveArchiveBtn" disabled
+                aria-describedby="saveArchiveHint">💾 保存图纸</button>
+        <span class="visually-hidden" id="saveArchiveHint">生成图纸后即可保存到本机浏览器</span>
+      </div>
+      <div class="archive-row">
+        <select id="archiveSelect" class="archive-select"
+                aria-label="已保存的图纸存档"></select>
+        <button class="btn btn-sm" id="loadArchiveBtn" disabled>📂 载入</button>
+        <button class="btn btn-sm" id="deleteArchiveBtn" disabled>🗑 删除</button>
+      </div>
+      <p class="archive-hint" id="archiveHint"></p>
+    </section>
+
     <!-- ====== 图片查看器 ====== -->
     <section class="viewer-section" id="viewerSection" hidden>
       <div class="viewer-toolbar">
@@ -94,6 +119,12 @@
 
     <!-- ====== 控制栏 ====== -->
     <section class="controls-section" id="controlsSection" hidden>
+      <!-- 存档模式横幅（PLAN 第三批 6b 的产品决策：控件**禁用 + 横幅说明**）。
+           ⚠️ 存在的理由：存档按 6a 的定案只含图纸本身（不含原图/选框/简化强度），
+           而「网格尺寸」与「颜色简化」都必须**重新采样原图**才能生效。
+           禁用控件而不说明，用户只会看到一片灰、以为坏了 ——
+           本仓库一贯要求"静默改变/静默失效不可接受"（同近似色合并必须播报替代色号）。 -->
+      <p class="archive-banner" id="archiveBanner" hidden></p>
       <div class="controls">
         <div class="control-group">
           <span class="control-label" id="gridSizeLabel">网格尺寸</span>
