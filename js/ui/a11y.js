@@ -1,6 +1,7 @@
 import { $, $$, controlsSection, downloadBtn, fileInput, previewSection, printBtn, saveArchiveBtn, selectionBox, statsSection, uploadSection, viewerCanvas, viewerSection, viewerWrapper } from '../core/dom.js';
 import { state, viewerCtx } from '../core/state.js';
 import { generateGrid } from '../pipeline/grid.js';
+import { resetEditState } from '../pipeline/edit.js';
 import { exitArchiveMode } from './library.js';
 import { resetSimplify } from './grid-select.js';
 import { updateSelectionBox } from '../viewer/selection.js';
@@ -113,6 +114,9 @@ $('#resetBtn').addEventListener('click', () => {
   state.rawColorCounts = null;
   state.mergedColors = [];
   state.aspectWarning = null;
+  // 换文档（回到最初）：编辑态复位 —— 撤销栈、工具、画笔色都不该跨图纸保留
+  // （见 js/pipeline/edit.js 硬约束 4；这里用 resetEditState 而非 clearEditHistory）
+  resetEditState();
   // 简化强度与网格尺寸回到默认，避免影响下一张图（C1 / m12）
   resetSimplify();
   state.gridW = 29;

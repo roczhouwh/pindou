@@ -16,14 +16,17 @@
 //               panzoom.js    —— 右键平移 / 滚轮 / 双指 / 窗口尺寸
 //     pipeline/ render.js     —— drawGrid / drawRuler / pickTextColor / FONT_STACK
 //               simplify.js   —— applySimplify / getStaticMergeMap …
-//               grid.js       —— generateGrid / generateGridCore
-//     output/   preview.js    —— fitPreviewGrid / renderPreview
+//               grid.js       —— generateGrid / generateGridCore / adoptGrid
+//               edit.js       —— 单元格编辑模型（PLAN 第三批 6c/6d：纯数据 + 独立撤销栈）
+//     output/   preview.js    —— fitPreviewGrid / computePreviewLayout / hitTestCell / renderPreview
 //               stats.js      —— renderStats
 //               export.js     —— computeDownloadSize / renderDownloadCanvas / downloadPNG …
 //     ui/       a11y.js       —— announce / markActiveGridBtn / 键盘通路 / clamp
 //               grid-select.js—— 网格预设 / 自定义 / 简化滑块 / 标尺开关
 //                                + setSamplingControlsEnabled（6b：无原图时置灰）
+//                                + refreshSamplingControls（6c：编辑锁）
 //               library.js    —— 图纸存档 UI（PLAN 第三批 6b：保存/载入/删除 + 无原图展示路径）
+//               edit-ui.js    —— 单元格编辑界面（PLAN 第三批 6c/6d：指针命中 / 工具栏 / 选色 / 撤销）
 //               loading.js    —— showLoading / hideLoading
 //               install.js    —— PWA 安装提示
 //
@@ -75,6 +78,10 @@ import './input/upload.js';
 import './pipeline/render.js';
 import './pipeline/simplify.js';
 import './pipeline/grid.js';
+// 单元格编辑模型层（PLAN 第三批 6c/6d / js/pipeline/edit.js）：
+// 它被 edit-ui.js 与 grid-select.js 引用，故可达；此处仍显式列一条，
+// 理由同 storage.js —— 入口的 import 列表是"页面会加载哪些文件"的真源。
+import './pipeline/edit.js';
 import './viewer/viewer.js';
 import './viewer/selection.js';
 import './viewer/panzoom.js';
@@ -90,6 +97,11 @@ import './ui/grid-select.js';
 //    所以**漏了这一条它永远不会被浏览器请求**，页面表现为"存档功能完全不存在"。
 //    这条规则由 `probe-verify-entry-chain.js` 与 `verify-browser-split.js` 双重守护。
 import './ui/library.js';
+// 单元格编辑界面层（PLAN 第三批 6c/6d / js/ui/edit-ui.js）：
+// ⚠️ 与 library.js 同类 —— 它是 **UI 叶子**（指针监听、工具栏、快捷键都在它自己顶层），
+//    没有任何别的模块 import 它，**漏了这一条它永远不会被浏览器请求**，
+//    页面表现为"编辑工具完全不存在"。同由 `probe-verify-entry-chain.js` 守护。
+import './ui/edit-ui.js';
 import './ui/loading.js';
 import './ui/install.js';
 

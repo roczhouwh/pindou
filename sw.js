@@ -39,7 +39,16 @@
 //      多份管理：命名/删除/配额失败/损坏时不覆盖）+ js/ui/library.js（存档 UI
 //      + **无原图展示路径**）；index.html 新增 #archiveSection（独立于上传区）
 //      与 #archiveBanner（载入存档后说明"为什么控件灰了"）
-const CACHE_NAME = 'pindou-v21';
+// v21：PLAN 第三批第 6c 单元格编辑 —— 新增 js/pipeline/edit.js（编辑模型 + 独立撤销栈）
+//      与 js/ui/edit-ui.js（预览命中测试 / 工具栏 / 统计表选色 / 撤销重做快捷键）；
+//      index.html 新增编辑工具栏（#editToolbar 及其按钮）与 #simplifyLockHint、
+//      统计表新增「选为画笔色」按钮；preview.js 抽出 computePreviewLayout/hitTestCell
+// v22：PLAN 第三批第 6d 最小可用撤销/重做 —— **与 6c 同一轮交付**，
+//      故缓存版本一并递增（撤销栈在 edit.js 内，UI 在 edit-ui.js 内，无新增文件）
+// v23：6c/6d 收尾 —— 截图核对时改掉了工具按钮的语义（**点当前工具不再退出编辑**，
+//      改走显式的「✕ 退出编辑」），故按钮的无障碍属性由 aria-pressed 改为
+//      role=radio + aria-checked；同时 index.html / style.css 都有相应调整
+const CACHE_NAME = 'pindou-v23';
 
 // 拼豆自己的资源列表（相对 SW 脚本作用域解析）
 // ⚠️ 每新增一个 js/ 模块都必须加进来 —— 漏了会导致**离线时该模块 404 → 白屏**，
@@ -61,6 +70,7 @@ const ASSET_PATHS = [
   './js/pipeline/render.js',
   './js/pipeline/simplify.js',
   './js/pipeline/grid.js',
+  './js/pipeline/edit.js',
   './js/viewer/viewer.js',
   './js/viewer/selection.js',
   './js/viewer/panzoom.js',
@@ -71,6 +81,7 @@ const ASSET_PATHS = [
   './js/ui/a11y.js',
   './js/ui/grid-select.js',
   './js/ui/library.js',
+  './js/ui/edit-ui.js',
   './js/ui/loading.js',
   './js/ui/install.js',
   './js/main.js',

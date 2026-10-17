@@ -49,6 +49,19 @@ export const applyCustom = $('#applyCustom');
 export const simplifySlider = $('#simplifySlider');
 export const simplifyValue = $('#simplifyValue');
 export const rulerToggle = $('#rulerToggle');
+// ---- 单元格编辑（PLAN 第三批 6c / 6d / js/ui/edit-ui.js）----
+export const editToolbar = $('#editToolbar');
+export const brushBtn = $('#brushBtn');
+export const eraseBtn = $('#eraseBtn');
+export const pickBtn = $('#pickBtn');
+export const exitEditBtn = $('#exitEditBtn');
+export const editColorSwatch = $('#editColorSwatch');
+export const editColorName = $('#editColorName');
+export const editHint = $('#editHint');
+export const undoBtn = $('#undoBtn');
+export const redoBtn = $('#redoBtn');
+/** 简化滑块被编辑锁住时的**就近说明**（PLAN 第三批 6c：编辑后禁用滑块必须说明原因） */
+export const simplifyLockHint = $('#simplifyLockHint');
 // ---- 图纸存档（PLAN 第三批 6b / js/ui/library.js）----
 export const archiveSection = $('#archiveSection');
 export const archiveName = $('#archiveName');

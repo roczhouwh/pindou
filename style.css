@@ -764,6 +764,116 @@ body {
   border-radius: 4px;
 }
 
+/* ---- 单元格编辑（PLAN 第三批 6c/6d / js/ui/edit-ui.js）---- */
+
+/* ⚠️ `touch-action: none` 只在**进入编辑模式**时加（`.editing` 类由 edit-ui.js 切换）：
+   不加 ⇒ 触屏拖拽被当成页面滚动，格子涂不上；
+   无条件加 ⇒ 未进入编辑时预览图也吃掉滚动手势，用户在手机上没法滑过这一屏。 */
+.preview-canvas.editing {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.edit-tool-btn {
+  padding: 6px 12px;
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.edit-tool-btn:hover { background: var(--primary-light); }
+
+/* 选中态必须**同时**靠颜色与边框/字重表达（只靠颜色对色盲用户不可辨，
+   同 .preview-warning 的处理思路） */
+.edit-tool-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.edit-exit-btn { color: var(--text-secondary); }
+
+.edit-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  min-width: 96px;
+}
+
+.edit-color-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+
+.edit-color-name { font-weight: 600; }
+
+.edit-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 提示条里的"警告"态：画笔没选色时用户点了会没反应，必须显眼（同 .preview-warning） */
+.edit-hint.edit-hint-warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* 统计表里的「选为画笔色」按钮 —— 常规字号会让 52×52 的表格明显变高，
+   故压小一档；它仍是有可访问名称的真实 <button>（键盘与读屏都可达）。 */
+.stats-pick-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.stats-pick-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary-hover);
+  border-color: var(--primary);
+}
+
+/* 简化滑块被手工编辑锁住时的**就近说明**。
+   ⚠️ 只置灰不解释 = 用户以为工具坏了（本仓库一贯要求：静默失效不可接受）。 */
+.simplify-lock-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger);
+  max-width: 320px;
+}
+
 .preview-info {
   font-size: 13px;
   color: var(--text-muted);

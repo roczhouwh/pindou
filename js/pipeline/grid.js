@@ -4,6 +4,7 @@ import { state } from '../core/state.js';
 import { showToast } from '../input/upload.js';
 import { renderPreview } from '../output/preview.js';
 import { renderStats } from '../output/stats.js';
+import { clearEditHistory } from './edit.js';
 import { applySimplify, cloneGrid, rebuildColorCounts } from './simplify.js';
 import { announce, clamp } from '../ui/a11y.js';
 import { hideLoading, showLoading } from '../ui/loading.js';
@@ -232,6 +233,19 @@ export function generateGridCore() {
   // 近同色对原样存在、凭空多出色号（PLAN §3.1 的缺陷）。
   applySimplify();
 
+  // ⚠️ **撤销栈必须在这里清掉**（PLAN 第三批 6c/6d）：这一轮的 gridData 是
+  //    **重新采样**的结果，上一轮的编辑点已无对应关系。不清栈就会出现
+  //    "撤销一下，格子被改回上一张图的值"这种最难看懂的数据错乱。
+  //    用 `clearEditHistory()` 而**不是** `resetEditState()`：后者连工具与
+  //    画笔色一起复位，而用户多半还要接着改，重新生成不该把他的工具收走。
+  //    提示由 `dropEditHistory()`（UI 层）负责 —— 见下方说明与 edit-ui.js。
+  const droppedStrokes = clearEditHistory();
+  if (droppedStrokes > 0) {
+    // 手工修正被静默抹掉是最容易被归因为"这工具坏了"的一类，必须如实告知。
+    // ⚠️ 提示文案里**不要**写"请用 Ctrl+Z" —— 此时栈已清空，撤销不回去了。
+    showToast(`已按新的设置重新生成图纸，之前的 ${droppedStrokes} 步手工修改已随之作废。`);
+  }
+
   renderPreview();
   renderStats();
   downloadBtn.disabled = false;
@@ -286,6 +300,11 @@ export function adoptGrid(grid) {
   // 见上方说明：rawGridData 是"采样原始值"的语义，载入路径**没有**它
   state.rawGridData = null;
   state.rawColorCounts = null;
+  // ⚠️ 撤销栈也要清掉（PLAN 第三批 6c/6d）：载入的是一份**别的图纸**，
+  //    上一张图的编辑点在这里没有任何对应关系（尺寸都可能不同）。
+  //    不清栈的后果与"重新生成"那条一样，但更隐蔽 —— 用户会以为
+  //    "撤销"是在撤销刚载入的这张图上的操作。
+  clearEditHistory();
   // 极端比例提示是"采样"环节的产物，载入的图纸没有经过采样 ⇒ 必须清掉，
   // 否则会挂着上一张图的警告文本
   state.aspectWarning = null;

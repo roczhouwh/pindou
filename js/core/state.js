@@ -69,7 +69,12 @@ export const AUTO_MERGE_DIST_SQ = 16;
 //         （`resetSimplify()`），与 ② 的性质正好相反。这是历史上 C1 缺陷的来源。
 //       · **一次性状态**：`image` / `imageW` / `imageH` / `zoom` / `panX` / `panY` /
 //         `selection` / `gridW` / `gridH` / `mergedColors` / `aspectWarning` /
-//         `colorCounts` / `rawGridData` / `rawColorCounts` 以及全部拖拽与触摸字段。
+//         `colorCounts` / `rawGridData` / `rawColorCounts` / `editTool` / `editColor` /
+//         `editHistory` / `editIndex` 以及全部拖拽与触摸字段。
+//
+// ⚠️ **编辑态（6c/6d）为什么归 ③ 而不是 ①**：撤销栈记的是"这一轮会话里我改过哪几格"，
+//    换一台设备打开时**不应该**携带（用户要的是那张图纸，不是别人改图的过程）。
+//    图纸本身（`gridData`）已经带着编辑结果入档 —— 结果入档、过程不入档。
 //
 // ⚠️ **两个已明确排除在存档之外、但将来会回来找麻烦的字段**：
 //   · `rawGridData` —— 语义是"**采样**的原始映射值"（供简化滑块回溯），
@@ -137,6 +142,42 @@ export const state = {
    * 与 `simplify` **相反**（后者是图像变换参数，重新上传必须归零）。
    */
   printColorBlocks: true,
+  // ---- 单元格编辑（PLAN 第三批 6c / 6d，见 js/pipeline/edit.js）----
+  /**
+   * 当前编辑工具：`'none'`（未进入编辑模式）/ `'brush'` / `'erase'` / `'pick'`。
+   *
+   * ⚠️ `'none'` 时预览画布**不接管指针** —— 否则用户在预览上滑动（移动端很常见）
+   *    会静默改掉图纸。编辑必须由用户显式进入，这是本功能的安全前提。
+   */
+  editTool: 'none',
+  /**
+   * 画笔颜色（色板对象形状 `{name,hex,r,g,b}`，无则 `null`）。
+   * 来源有两个：颜色统计表点选、或吸管从某一格取色（见 `js/ui/edit-ui.js`）。
+   *
+   * ⚠️ 它必须是**副本**，不能是 `PERLER_PALETTE` 里的对象引用 ——
+   *    否则一次编辑就会就地改坏全局色板（PLAN §3.4 三重别名缺陷，
+   *    `js/pipeline/edit.js` 的硬约束 1 有说明与守护）。
+   */
+  editColor: null,
+  /**
+   * **撤销栈**（6d）：`[{ changes: [{row, col, before, after}] }]`，
+   * 一笔 = 一次按下到抬起之间的全部改动。
+   *
+   * ⚠️ **绝不能用 `rawGridData` 当撤销栈**（PLAN §5.1 明确要求）：
+   *    它的语义是"**采样**原始值"，而载入存档后它**是 `null`**（§3.7 的载入路径
+   *    刻意不重建它）。在无原图模式下用它当撤销栈会当场拿到 null。
+   *
+   * ⚠️ **不入档**（属 ③）：图纸结果（`gridData`）已入档，编辑**过程**不入档。
+   */
+  editHistory: [],
+  /**
+   * 撤销栈的游标：**已应用**的笔数。`0` = 无编辑；
+   * `editIndex < editHistory.length` 表示还有可重做的笔。
+   *
+   * ⚠️ 它同时是"图纸是否被手工编辑过"的判据（`hasAppliedEdits()`）——
+   *    简化滑块要靠它决定是否禁用（编辑会被整份重算抹掉，见 `js/ui/grid-select.js`）。
+   */
+  editIndex: 0,
   // 拖拽状态
   isDragging: false,
   isResizing: false,

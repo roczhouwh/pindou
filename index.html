@@ -155,6 +155,10 @@
                    aria-describedby="simplifyValue" aria-valuetext="关闭">
             <span class="simplify-value" id="simplifyValue">关闭</span>
           </div>
+          <!-- ⚠️ 手工编辑过图纸后，简化滑块**必须禁用**并说明原因（PLAN 第三批 6c）：
+               滑块是"回到 rawGridData 整份重算"，会把用户的逐格修正**静默抹掉** ——
+               而滑块本身完全看不出这件事。只置灰不解释 = 用户以为工具坏了。 -->
+          <p class="simplify-lock-hint" id="simplifyLockHint" hidden></p>
         </div>
         <!-- 行列标尺：52×52 以上靠肉眼数格子必错（PLAN §2.2 P0）。
              用 <label for> 关联，可访问名称即「行列标尺」——复选框自身表达开关状态，
@@ -196,6 +200,48 @@
     <!-- ====== 图纸预览 ====== -->
     <section class="preview-section" id="previewSection" hidden>
       <h2 class="section-title">图纸预览</h2>
+      <!-- ====== 单元格编辑工具栏（PLAN 第三批 6c / 6d） ======
+           ⚠️ 放在**预览区内部**（不是控制栏）：编辑的对象就是下面这块 canvas，
+           工具栏与它同处一屏，用户不必在两块区域之间来回找。
+           ⚠️ 「画笔 / 擦除 / 吸管」三个按钮是**显式进入**编辑模式的唯一入口：
+           未选中任一工具时预览画布**不接管指针** —— 否则移动端在预览上滑动
+           （很常见的动作）会静默改掉图纸。 -->
+      <div class="edit-toolbar" id="editToolbar">
+        <!-- ⚠️ 三个工具用 **radiogroup/radio + aria-checked**，**不是** `aria-pressed` 切换钮。
+             理由：`aria-pressed` 的语义是"**可再按一次弹起来**的切换钮"，
+             而这个工具组是**单选** —— 点当前工具只是"保持选中"、**不退出**编辑
+             （见 `js/ui/edit-ui.js` 的 `toggleTool()`：那里记了为什么
+             "再点一次 = 退出"被实测否掉）。
+             用 `aria-pressed` 会让读屏用户以为再按一次能取消，实际不能 ——
+             语义与行为不符。`role="radio"` 表达的正是"这一组里选一个"。
+             ⚠️ 退出编辑走**旁边那个显式的**「✕ 退出编辑」按钮，不复用工具按钮。 -->
+        <span class="edit-tools" role="radiogroup" aria-label="编辑工具">
+          <button class="edit-tool-btn" id="brushBtn" role="radio" aria-checked="false"
+                  aria-describedby="editHint">🖌 画笔</button>
+          <button class="edit-tool-btn" id="eraseBtn" role="radio" aria-checked="false"
+                  aria-describedby="editHint">🧽 擦除</button>
+          <button class="edit-tool-btn" id="pickBtn" role="radio" aria-checked="false"
+                  aria-describedby="editHint">💧 吸管</button>
+        </span>
+        <button class="edit-tool-btn edit-exit-btn" id="exitEditBtn" hidden>✕ 退出编辑</button>
+        <!-- 当前画笔颜色：色号名是**文本**，色块只是辅助 ——
+             只给一个色块的话，色盲用户拿不到"我正要涂哪个色号"这条关键信息 -->
+        <span class="edit-color" id="editColorBox">
+          <span class="edit-color-swatch" id="editColorSwatch" aria-hidden="true" hidden></span>
+          <span class="edit-color-name" id="editColorName">未选色</span>
+        </span>
+        <!-- 撤销/重做：编辑能力上线而撤销缺席，对"改错一格就毁掉整张图"的工具不可接受 -->
+        <button class="btn btn-sm" id="undoBtn" disabled
+                aria-describedby="undoHint">↶ 撤销</button>
+        <button class="btn btn-sm" id="redoBtn" disabled
+                aria-describedby="redoHint">↷ 重做</button>
+        <span class="visually-hidden" id="undoHint">撤销上一次单元格编辑（快捷键 Ctrl+Z）</span>
+        <span class="visually-hidden" id="redoHint">重做上一次撤销的编辑（快捷键 Ctrl+Shift+Z）</span>
+      </div>
+      <!-- 编辑提示条：**必须能说明"现在点了会发生什么"**。
+           未选工具 / 选了画笔却没选色 / 简化被禁用等原因都写在这里，
+           不让用户靠试错去发现（本仓库一贯要求：静默失效不可接受）。 -->
+      <p class="edit-hint" id="editHint"></p>
       <div class="preview-container">
         <!-- 预览是工具的唯一产出物，必须让读屏用户也能感知（见 REVIEW.md M4） -->
         <canvas id="previewCanvas" class="preview-canvas"

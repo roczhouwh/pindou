@@ -1,8 +1,9 @@
-import { $, $$, applyCustom, customH, customW, rulerToggle, simplifySlider, simplifyValue } from '../core/dom.js';
+import { $, $$, applyCustom, customH, customW, rulerToggle, simplifyLockHint, simplifySlider, simplifyValue } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { showToast } from '../input/upload.js';
 import { renderPreview } from '../output/preview.js';
 import { renderStats } from '../output/stats.js';
+import { hasAppliedEdits } from '../pipeline/edit.js';
 import { generateGrid } from '../pipeline/grid.js';
 import { applySimplify } from '../pipeline/simplify.js';
 import { announce, markActiveGridBtn } from './a11y.js';
@@ -20,6 +21,13 @@ import { announce, markActiveGridBtn } from './a11y.js';
 // ============================================================
 // 4. 网格尺寸选择
 // ============================================================
+
+/**
+ * 当前是否**有原图**（"依赖重新采样的控件"能否可用的原因之一）。
+ * 由 `setSamplingControlsEnabled()` 维护；与"是否被手工编辑锁住"是两个独立的量，
+ * 见 `refreshSamplingControls()` 的说明。
+ */
+let hasImage = false;
 
 $$('.grid-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -63,6 +71,17 @@ applyCustom.addEventListener('click', () => {
 
 // 颜色简化滑块
 simplifySlider.addEventListener('input', () => {
+  // ⚠️ 被编辑锁住时**不能**继续：`applySimplify()` 会拿 rawGridData 整份重算，
+  //    把用户的逐格修正全部抹掉。控件已置 `disabled`（挡得住键盘与指针），
+  //    但脚本/自动化仍能派发 input —— 故这里必须再挡一道，并且**说明原因**，
+  //    不做成"拖了没反应"（本仓库一贯要求：静默失效不可接受）。
+  if (hasAppliedEdits()) {
+    showToast('图纸已被手工编辑过：颜色简化会按原始采样值整份重算、抹掉这些修改。'
+      + '请先撤销全部编辑（Ctrl+Z）再用简化。');
+    // 把滑块位置拨回与 state 一致，避免界面显示一个并未生效的强度
+    simplifySlider.value = String(state.simplify);
+    return;
+  }
   const val = parseInt(simplifySlider.value);
   state.simplify = val;
   const label = val === 0 ? '关闭' : `${val}%`;
@@ -81,12 +100,15 @@ simplifySlider.addEventListener('input', () => {
  * 把简化强度清零，并同步滑块 DOM。
  * 重新上传 / 重置时必须调用：否则新图会被上一张图的强度静默简化，
  * 而滑块 UI 仍显示旧值，用户会误以为是新图本身的色彩问题（见 REVIEW.md C1）。
+ *
+ * ⚠️ 读数文案**交给 `refreshSamplingControls()`**，不要在这里直接写死"关闭"：
+ *    禁用有"无原图"与"已手工编辑"两个原因，两处的读数不同，
+ *    两处各写一份必然漂移（表现为读数与实际可用性不符）。
  */
 export function resetSimplify() {
   state.simplify = 0;
   simplifySlider.value = 0;
-  simplifyValue.textContent = '关闭';
-  simplifySlider.setAttribute('aria-valuetext', '关闭');
+  refreshSamplingControls();
 }
 
 // 行列标尺开关（PLAN §五 第一批第 3 项）。
@@ -123,19 +145,57 @@ rulerToggle.addEventListener('change', () => {
  * @param {boolean} enabled true = 有原图，恢复可用（默认路径）
  */
 export function setSamplingControlsEnabled(enabled) {
+  hasImage = !!enabled;
+  refreshSamplingControls();
+}
+
+/**
+ * 按**当前真实状态**重算"哪些采样控件可用"，并同步读数与说明。
+ *
+ * ⚠️ 抽成"按 state 重算"而不是"设一个布尔"，是因为禁用有**两个独立原因**：
+ *   ① 无原图（6b 的产品决策）；
+ *   ② 图纸被手工编辑过（6c）—— 见下。
+ *    用"设布尔"的写法时，两个原因会互相覆盖：上传新图调 `(true)` 会把
+ *    编辑锁一起解开，而那时编辑锁**必须**还在。
+ *
+ * ⚠️ **编辑锁的理由**（PLAN 第三批 6c 的产品决策）：
+ *    `applySimplify()` 是"拿 `rawGridData` **整份重算**"，
+ *    它会把用户的逐格修正**全部抹掉** —— 而滑块本身完全看不出这件事。
+ *    只置灰不解释 = 用户以为工具坏了，故同时显示 `#simplifyLockHint` 说明原因
+ *    与恢复办法（撤销掉全部编辑）。
+ */
+export function refreshSamplingControls() {
+  const lockedByEdit = hasAppliedEdits();
+  const gridEnabled = hasImage;
+  const simplifyEnabled = hasImage && !lockedByEdit;
+
   // 网格预设按钮：预设尺寸本身仍要显示当前值（active 态保留），只是不可再切换
-  $$('.grid-btn').forEach((b) => { b.disabled = !enabled; });
-  customW.disabled = !enabled;
-  customH.disabled = !enabled;
-  applyCustom.disabled = !enabled;
-  simplifySlider.disabled = !enabled;
+  $$('.grid-btn').forEach((b) => { b.disabled = !gridEnabled; });
+  customW.disabled = !gridEnabled;
+  customH.disabled = !gridEnabled;
+  applyCustom.disabled = !gridEnabled;
+  simplifySlider.disabled = !simplifyEnabled;
+
   // 置灰时把滑块读数改成说明文字：否则屏幕上会留一个"0 = 关闭"的读数，
   // 让人以为简化被关掉了，而真实原因是它压根不可用。
   // ⚠️ aria-valuetext 必须一起改 —— 只改可见文字的话，
   //    读屏用户听到的仍是"关闭"（`<input type=range>` 的读数取自该属性）。
-  const label = enabled
-    ? (state.simplify === 0 ? '关闭' : `${state.simplify}%`)
-    : '需原图';
+  let label;
+  if (!hasImage) {
+    label = '需原图';
+  } else if (lockedByEdit) {
+    label = '已手工编辑';
+  } else {
+    label = state.simplify === 0 ? '关闭' : `${state.simplify}%`;
+  }
   simplifyValue.textContent = label;
   simplifySlider.setAttribute('aria-valuetext', label);
+
+  // 就近说明"为什么灰了"（横幅在大网格/无原图路径上已有说明，
+  // 但滑块右边这一条在**编辑锁**这一新原因下是唯一的解释来源）
+  simplifyLockHint.hidden = !lockedByEdit;
+  simplifyLockHint.textContent = lockedByEdit
+    ? '已手工修改过图纸：颜色简化会按原始采样值整份重算，抹掉这些修改。'
+      + '若要再用简化，请先撤销全部编辑（快捷键 Ctrl+Z）。'
+    : '';
 }

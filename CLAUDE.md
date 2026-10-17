@@ -59,14 +59,17 @@ js/viewer/          viewer.js   — computeImageRect / renderViewer / resizeView
 js/pipeline/        render.js   — drawGrid / drawRuler / rulerMetrics / pickTextColor / FONT_STACK
                     simplify.js — applySimplify / getStaticMergeMap / cloneGrid / rebuildColorCounts
                     grid.js     — generateGrid / generateGridCore / **adoptGrid**（接管外部图纸）
-js/output/          preview.js  — fitPreviewGrid / renderPreview
-                    stats.js    — renderStats
+                    edit.js     — **单元格编辑模型**（纯数据 + **独立撤销栈**；PLAN §3.8 / 第三批 6c/6d）
+js/output/          preview.js  — fitPreviewGrid / **computePreviewLayout** / **hitTestCell** / **cellsBetween** / renderPreview
+                    stats.js    — renderStats（含「选为画笔色」按钮）
                     export.js   — computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
                     print.js    — encodeCellName / computePrintPaging / renderPrintLayout / printGrid（A4 打印出口）
 js/ui/              a11y.js     — announce / markActiveGridBtn / 键盘通路 / clamp
                     grid-select.js — 网格预设 / 自定义 / 简化滑块 / 标尺开关
                                      + **setSamplingControlsEnabled**（无原图时置灰）
+                                     + **refreshSamplingControls**（6c：编辑锁 + 就近说明）
                     library.js  — **存档 UI**（保存/载入/删除 + **无原图展示路径**；PLAN §3.7）
+                    edit-ui.js  — **单元格编辑界面**（指针命中 / 工具栏 / 统计表选色 / 撤销重做快捷键；PLAN §3.8）
                     loading.js  — showLoading / hideLoading
                     install.js  — PWA 安装提示
 js/main.js          — **模块入口**（ESM 单入口）
@@ -167,6 +170,9 @@ js/main.js          — **模块入口**（ESM 单入口）
 | `rulerEnabled` | 是否显示**行列标尺**，默认 `true`。**显示偏好，不是图像参数** —— `handleFile()` 刻意**不重置**它（与 `simplify` 相反）。只影响绘制，切换时**不重新生成网格** |
 | `printColorBlocks` | 打印时**是否输出色块底色**，默认 `true`。**输出偏好，不是图像参数** —— `handleFile()` 同样刻意**不重置**（与 `rulerEnabled` 同例、与 `simplify` 相反）。关掉即 §4.5 的**省墨模式**（只印网格线与色号）。见下方「A4 打印出口」 |
 | `dragStartImage` / `dragStartClient` / `panStartPan` | ✅ **语义已拆开**：分别为**归一化图片坐标** / **client 像素坐标** / **pan 偏移量起点**。此前挤在一个 `dragStart`/`panStart` 里（同名不同形状）。**不要合并回去，也不要跨语义混用**（`test-dragstart-semantics.js` 守护） |
+| `editTool` | 当前编辑工具：`'none'`（**未进入编辑**）/ `'brush'` / `'erase'` / `'pick'`。⚠️ `'none'` 时预览画布**不接管指针** —— 否则移动端在预览上滑动会静默改掉图纸 |
+| `editColor` | 画笔颜色（色板对象形状，无则 `null`）。来源：统计表点选 / 吸管取色。**必须是副本**，不能是 `PERLER_PALETTE` 的对象引用 |
+| `editHistory` / `editIndex` | **撤销栈**（一笔 = 一次按下到抬起）与游标（= **已应用**笔数）。⚠️ **绝不能用 `rawGridData` 当撤销栈**（载入存档后它是 `null`）；`editIndex > 0` 同时是"图纸被手工编辑过"的判据（简化滑块据此禁用）。**不入档** —— 结果入档、过程不入档 |
 
 ## 色板 (color-palette.js)
 
@@ -216,6 +222,18 @@ js/main.js          — **模块入口**（ESM 单入口）
   页眉标注"第 N/4 页 · 第 X 行第 Y 块 · 列 a-b / 行 c-d"）。点之前屏幕上先给出页数与每格尺寸。
   **「打印色块」**复选框控制是否输出色块底色 —— 关掉即**省墨模式**（只印网格线与色号，
   灰度下色号是唯一信息源）。见下方「A4 打印出口」小节
+- **单元格编辑**（画笔 / 擦除 / 吸管 + 撤销/重做）：在预览区上方的工具栏点「🖌 画笔」等
+  **显式进入**编辑模式，然后在**预览图**上点格子改色、**按住拖动连续涂**。
+  选色有两种：在「颜色统计」表里点某行的「🖌 选为画笔色」，或用「💧 吸管」从图上取色。
+  撤销/重做用工具栏按钮或 `Ctrl+Z` / `Ctrl+Shift+Z`（`Ctrl+Y` 亦可）。
+  **退出编辑**走工具栏里那个「✕ 退出编辑」按钮。
+  ⚠️ **点当前已选中的工具不会退出编辑**（只是保持选中）—— 与所有绘图软件一致。
+  特意如此的理由：选完色会**自动进入画笔态**，用户接着去点「🖌 画笔」是极自然的动作；
+  若那一下等于"退出"，他会发现"怎么点都不改图"且毫无提示（**实测踩到过**，
+  见 PLAN §3.8）。所以那组工具按钮是 `role="radiogroup"` + `aria-checked` 的**单选组**，
+  **不是** `aria-pressed` 切换钮（后者的语义是"可再按一次弹起来"，与实际行为不符）。
+  ⚠️ **未选中任何工具时预览画布不接管指针** —— 移动端在预览上滑动不会改图。
+  ⚠️ **编辑过之后「颜色简化」滑块会被禁用**（见下方「单元格编辑」小节的硬约束 3）。
 
 ## 预览参数
 
@@ -482,6 +500,76 @@ PNG 里**没有物理尺寸**。52×52 走"100% 原始大小"是 78.7cm 宽、
 > （实例属性赋值被吞掉），用它模拟"配额不足"会让保存照样成功、测试**假红**。
 > 必须把 `globalThis.localStorage` **整个换掉**（见 `test-library.js` 的两个桩）。
 
+## ✏️ 单元格编辑（改 `js/pipeline/edit.js` / `js/ui/edit-ui.js` 前必读）
+
+> 三层分工（与 6b 的存档三层同构，**不要互相越界**）：
+>
+> | 模块 | 职责 | 边界 |
+> |---|---|---|
+> | `js/pipeline/edit.js` | 改**哪一格**、怎么改、撤销栈怎么记 | **不碰 DOM、不 import UI** |
+> | `js/output/preview.js` | 预览版面几何 + `hitTestCell()` + `cellsBetween()` | **纯函数，命中几何的唯一真源** |
+> | `js/ui/edit-ui.js` | 指针事件 / 工具栏 / 选色 / 快捷键 | **不自己改 `gridData`** |
+>
+> 守护套件 `test-edit.js`（**51 条**）+ `probe-edit-mutation.js`（**22 种突变**）
+> + `verify-edit-browser.js`（真实 Chrome **17 条**）+ `shot-edit.js`（截图，非回归）。
+
+| 函数 | 职责 |
+|---|---|
+| `computePreviewLayout(cols, rows, maxW, ruler, padding)` | **纯函数**：画布尺寸 / 格子尺寸 / 标尺边距 / 网格原点 |
+| `previewLayoutFor(grid, rulerEnabled)` | 按当前 `state` 与真实容器宽度取版面 |
+| `hitTestCell(localX, localY, layout)` | 画布局部坐标 → 行列号（越界返回 `null`） |
+| `cellsBetween(from, to)` | 两格之间**经过**的全部格子（拖拽路径补全） |
+| `paintCell(row, col)` / `pickColorAt()` | 施加当前工具 / 吸管取色 |
+| `beginStroke()` / `endStroke()` / `isStrokeOpen()` | 一笔的生命周期。⚠️ **没有"显式/隐式"参数**：自动收尾靠**对象身份**判断该收哪一笔（见 `autoCloseStroke`） |
+| `undoEdit()` / `redoEdit()` / `canUndo()` / `canRedo()` | 撤销/重做 |
+| `clearEditHistory()` / `resetEditState()` | 清栈（保留工具 / 连工具一起复位） |
+| `setEditStateListener(fn)` | UI 监听编辑态变化（**方向是 UI 监听模型**） |
+
+**六条硬约束**：
+
+1. **写入的格子必须是副本**（`copyCell()`）。这是 PLAN §3.4「三重别名」缺陷的
+   **第四个入口**（前三次：采样路径 / 反序列化 / `adoptGrid`）。一旦某个格子指向
+   全局色板，下一次编辑就会就地改坏**所有后续生成的图**。
+2. **撤销栈独立，绝不能用 `rawGridData`**：它的语义是"**采样**原始值"，
+   而载入存档后它**是 `null`** —— 拿它当栈会在无原图模式下当场拿到 `null`。
+3. **命中几何只有一个真源**：不要在编辑侧另写"canvas 宽减 padding 除以列数"。
+   漂移的症状是**点这一格、改旁边那一格**（用户会照着改错号的图纸去买豆）。
+   ⚠️ **坐标必须用 `getBoundingClientRect()`，不能用 `canvas.width`** ——
+   后者已乘 `dpr`，2x 屏上会把所有点击映射到左上 1/4 区域。
+4. **未选中工具时预览画布绝不接管指针**（`state.editTool === 'none'` 直接返回）。
+   否则移动端在预览上滑动（很常见的动作）会**静默改掉图纸**。
+   触屏的 `touch-action: none` 也只在该模式下加（`.editing` 类）。
+5. **拖拽路径必须补全**（`cellsBetween()`）：`pointermove` 是**按帧离散采样**的，
+   只处理"事件落在哪一格"会在快速拖动时留下**断点**（用户画实线、图纸上是虚线）。
+6. **换文档清栈、重新生成也清栈**，但语义不同：`resetEditState()`（重新上传 / 重置 /
+   载入存档）连工具一起复位；`clearEditHistory()`（重新生成）**只清历史、保留工具**，
+   且**必须提示**"之前的 N 步手工修改已随之作废"。
+
+> ⚠️ **编辑与简化滑块的冲突（产品决策，不要"顺手解开"）**：
+> `applySimplify()` 是"拿 `rawGridData` **整份重算**"，会把用户的逐格修正**全部抹掉**，
+> 而滑块本身看不出这件事。故 `editIndex > 0` 时简化滑块**禁用**，
+> 并在滑块**就近**显示原因与恢复办法（`#simplifyLockHint`）。
+> **撤销掉全部编辑后锁自动解除**（判据是 `editIndex`，不是 `editHistory.length > 0`）。
+> 滑块 `input` 里另有一道兜底 —— `disabled` 挡得住指针，挡不住脚本派发。
+
+> ⚠️ **编辑工具栏挂在 `#previewSection` 内部**（不是控制栏）：编辑的对象就是
+> `#previewCanvas`，两者同屏用户才不必来回找。
+
+> ⚠️ **统计表的「选为画笔色」按钮用事件委托**：`renderStats()` 是整表 `innerHTML`
+> 重建，逐个绑定在每次重绘后都要重来一遍，漏一次的表现就是"按钮点了没反应"。
+> 重建后**必须还原键盘焦点**（见 `refreshStatsKeepingFocus()`），否则键盘用户失去落点。
+
+> ⚠️ **三个工具按钮是 `role="radiogroup"` 单选组，不是 `aria-pressed` 切换钮** ——
+> 因为它们**再按一次不取消**（退出编辑走显式的「✕ 退出编辑」）。
+> **不要"顺手"把 `aria-checked` 改回 `aria-pressed`**：那会让读屏用户以为再按一次能取消，
+> 而实际行为是保持选中，属于语义与行为不符。
+>
+> ⚠️ **`paintCell()` 会自动补开一笔**（无进行中的一笔时），并在**微任务**里收尾。
+> 收尾必须比对**对象身份**（`autoCloseStroke(target)`），不能只看 `stroke !== null` ——
+> 微任务是延迟执行的，在那之前调用方完全可能已经开了新的一笔，
+> 只看"当前有没有一笔"会把**新那一笔**提前结掉（症状：偶发"一次拖拽被切成两笔，
+> 撤销要按两下"，且只在特定时序下复现）。
+
 ## PWA 相关
 
 - `manifest.json`：standalone 模式，indigo 主题色
@@ -567,13 +655,17 @@ python3 -m http.server 8080
 > **完整清单、优先级排序、执行进度与实施方案见 [docs/PLAN.md](docs/PLAN.md)**。
 > 本节**仅保留索引**，避免两份清单各自漂移。
 
-**进行中**：**单元格编辑 + 撤销/重做**（下一轮入口 = **6c 单元格编辑**，见
-[PLAN §5.1](docs/PLAN.md) 开头的「🚪 下一轮从这里开始」、§3.4、§3.7）。
+**进行中**：无。
 > ✅ **6a 序列化地基已完成**（`js/core/serialize.js`，见上「序列化地基」小节与 PLAN §3.6）。
 > ✅ **6b 网格保存/加载已完成**（`js/core/storage.js` + `js/ui/library.js`，
 > 见上「存档存储层与无原图模式」小节与 PLAN §3.7）。
+> ✅ **6c 单元格编辑 + 6d 撤销/重做已完成**（`js/pipeline/edit.js` + `js/ui/edit-ui.js`，
+> 见上「单元格编辑」小节与 PLAN §3.8）。**第三批到此收尾。**
 
 **尚未开工**：抖动算法、分块渲染。
+**待确认**：简化滑块高端行为（PLAN §3.3，需产品决策）。
+**下一步（非功能项）**：结构收尾 —— 拆 `pointermove` 三合一回调 +
+把跨领域调用收拢到 `js/main.js`（PLAN §5.1 最后一步）。
 
 **已搁置**：多品牌色板支持（依赖色板抽象，成本主要在数据可靠性）、
 色板自定义编辑（依赖最多、风险最高，需版本化）、

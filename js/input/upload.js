@@ -1,6 +1,7 @@
 import { $, cameraBtn, cameraInput, fileInput, uploadError, uploadZone } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { closeCamera, openCamera } from './camera.js';
+import { resetEditState } from '../pipeline/edit.js';
 import { markActiveGridBtn } from '../ui/a11y.js';
 import { resetSimplify } from '../ui/grid-select.js';
 import { showViewer } from '../viewer/viewer.js';
@@ -105,6 +106,10 @@ export function handleFile(file) {
       state.colorCounts = null;
       state.rawGridData = null;
       state.rawColorCounts = null;
+      // 换文档：编辑态一并复位（撤销栈 + 工具 + 画笔色）。
+      // ⚠️ 撤销栈绝不能跨文档保留：新网格是**另一张图**的采样结果，
+      //    旧编辑点在这里没有对应关系（见 js/pipeline/edit.js 的硬约束 4）。
+      resetEditState();
       // 简化强度与网格尺寸必须回到默认，否则新图会沿用上一张图的设置（C1 / m12）
       resetSimplify();
       state.gridW = 29;

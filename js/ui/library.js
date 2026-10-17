@@ -6,6 +6,7 @@ import { state } from '../core/state.js';
 import { MAX_ARCHIVES, deleteArchive, readArchive, readLibrary, saveArchive } from '../core/storage.js';
 import { showToast } from '../input/upload.js';
 import { adoptGrid } from '../pipeline/grid.js';
+import { resetEditState } from '../pipeline/edit.js';
 import { announce, markActiveGridBtn } from './a11y.js';
 import { resetSimplify, setSamplingControlsEnabled } from './grid-select.js';
 
@@ -151,6 +152,10 @@ function enterArchiveMode(meta) {
 
   // 载入的图纸没有走过采样 ⇒ simplify 必须归零（它是**图像参数**，见 state.js 三类划分）
   resetSimplify();
+  // 编辑态复位：载入的是**另一份图纸**，上一张图的撤销栈在这里没有对应关系
+  // （尺寸都可能不同）。`adoptGrid()` 里也会清一次 —— 两处都不省：
+  // 那是"接管任何外部图纸"的公共入口，将来别的来源同样需要它。
+  resetEditState();
   // 依赖原图重新采样的控件全部禁用（网格尺寸 / 自定义 / 简化滑块）
   setSamplingControlsEnabled(false);
 

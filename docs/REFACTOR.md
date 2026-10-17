@@ -48,16 +48,16 @@
 
 | 指标 | 写作时 | 改造前峰值 | **当前** |
 |---|---|---|---|
-| `app.js` 行数 | 1326 | 2137 | **已删除**（内容全部迁至 `js/` 下 19 个模块，含入口 `main.js`） |
+| `app.js` 行数 | 1326 | 2137 | **已删除**（内容全部迁至 `js/` 下 24 个模块，含入口 `main.js`） |
 | 承载的特性域 | 12 个 | 12 个 | 分散在 `js/{core,input,viewer,pipeline,output,ui}/` |
 | 顶层函数 | 21 个 | 29+ 个 | 按特性域归属各模块，跨模块引用显式 `import` |
 | 顶层事件监听 | 26 处 | 28 处 | 随所属领域落位 |
-| `state` 字段 | 21 个（3 个未声明） | 30 个（均已声明） | 30 个，定义在 `js/core/state.js` |
+| `state` 字段 | 21 个（3 个未声明） | 30 个（均已声明） | **34 个**（含 6c/6d 的 4 个编辑态字段），均声明在 `js/core/state.js` |
 | 脚本加载方式 | `<script src>` 裸标签，**非 ESM** | 同左 | **原生 ESM**（`<script type="module">` 单入口） |
 
 > **⚠️ 模块边界已建立。** §7.1 的「前四步」与「步骤 0（改 ESM）」「步骤 5（模块搬迁）」
 > **均已全部完成**：三个硬阻塞解除、重复逻辑 4 项收敛为单一实现、
-> 19 个模块各有明确归属、跨模块依赖由 `import` 语句显式表达。
+> 24 个模块各有明确归属、跨模块依赖由 `import` 语句显式表达。
 > （步骤 5 完成时为 18 个；PLAN §五 第二批第 5 项新增 `js/output/print.js` 后为 **19** 个，
 > 恰好是本节一直写的数字 —— 见 §8.3 模块清单。）
 >
@@ -278,19 +278,22 @@ js/
 │   ├── selection.js      # updateSelectionBox + 选框拖拽
 │   └── panzoom.js        # 滚轮缩放 + 右键平移 + 触摸 + 窗口尺寸
 ├── pipeline/
-│   ├── grid.js           # generateGrid() 入口 + generateGridCore() 实现
+│   ├── grid.js           # generateGrid() 入口 + generateGridCore() 实现 + adoptGrid()
 │   ├── simplify.js       # applySimplify / rebuildColorCounts / getStaticMergeMap
-│   └── render.js         # drawGrid + pickTextColor + drawRuler / rulerMetrics / RULER_* / FONT_STACK
+│   ├── render.js         # drawGrid + pickTextColor + drawRuler / rulerMetrics / RULER_* / FONT_STACK
+│   └── edit.js           # 单元格编辑模型：paintCell / 独立撤销栈 / 一笔的生命周期（PLAN 第三批 6c/6d）
 ├── output/
-│   ├── preview.js        # fitPreviewGrid / renderPreview
-│   ├── stats.js          # renderStats
+│   ├── preview.js        # fitPreviewGrid / computePreviewLayout / hitTestCell / cellsBetween / renderPreview
+│   ├── stats.js          # renderStats（含「选为画笔色」按钮）
 │   ├── export.js         # computeDownloadSize / renderDownloadCanvas / downloadPNG / sharePNG
 │   └── print.js          # encodeCellName / computePrintPaging / renderPrintLayout / printGrid（A4 打印出口）
 ├── ui/
 │   ├── a11y.js           # announce / markActiveGridBtn / 键盘通路 / clamp
 │   ├── grid-select.js    # 网格预设 / 自定义 / 简化滑块 / 标尺开关
 │   │                     #   + setSamplingControlsEnabled（无原图模式置灰，PLAN §3.7）
+│   │                     #   + refreshSamplingControls（编辑锁 + 就近说明，PLAN §3.8）
 │   ├── library.js        # 图纸存档 UI：保存/载入/删除 + **无原图展示路径**（PLAN §3.7）
+│   ├── edit-ui.js        # 单元格编辑界面：指针命中 / 工具栏 / 选色 / 撤销重做快捷键（PLAN §3.8）
 │   ├── loading.js        # showLoading / hideLoading
 │   └── install.js        # PWA 安装提示
 └── main.js               # 编排层入口（⚠️ 现状：只拉起模块图，尚未承载逻辑）
@@ -323,6 +326,21 @@ js/
 >   > （`test-library.js` 有对应的静态判据，突变⑫⑬ 守护其行为侧）。
 > - **`library.js` 是 `ui/` 下的叶子，唯一的装配入口是 `main.js`**（同 `serialize.js`）：
 >   它没有被别的模块 import，**漏了 `main.js` 里那条 import 就整块功能不存在**。
+> - **`edit.js` 属 `pipeline/`、且不 import DOM 与 UI**（PLAN 第三批 6c/6d）：
+>   它只认 `state.gridData` / `state.colorCounts`。界面刷新走**观察者**
+>   （`setEditStateListener()`，由 `js/ui/edit-ui.js` 注册）—— 方向是 **UI 监听模型**，
+>   **不是**模型反向调 UI。这样它才能被测试直接驱动，也才不会被界面改动牵动。
+> - **`edit-ui.js` 与 `library.js` 同类：`ui/` 下的叶子**（工具栏、指针监听、快捷键都在
+>   它自己顶层），同样**必须**在 `main.js` 里有一条 import，否则整块编辑功能不存在。
+> - **命中的几何只有一个真源：`preview.js` 的 `computePreviewLayout()` / `hitTestCell()`**。
+>   `edit-ui.js` **不得**自己再算一遍"canvas 减 padding 除以列数" ——
+>   两处漂移的症状是**点这一格、改旁边那一格**（用户会照着改错号的图纸去买豆）。
+>   这也正是把 `computePreviewLayout()` 放在 `output/preview.js`（而不是编辑侧）的理由：
+>   绘制与命中必须共用同一份数学。
+> - **`edit.js` 的 `paintCell()` 会自动补开一笔**并在**微任务**里收尾；收尾必须比对
+>   **对象身份**（`autoCloseStroke(target)`）。**不要**改成"看当前有没有一笔" ——
+>   微任务是延迟的，在那之前可能已经开了新的一笔，那样会把**新那一笔**提前结掉
+>   （症状：偶发"一次拖拽被切成两笔，撤销要按两下"，只在特定时序下复现）。
 > - **存档模式（无原图）的退出点只有一个：`showViewer()`**。它调用
 >   `exitArchiveMode()`；**不要在各条分支上分别复位**（分支一多必漏，
 >   表现为"上传了新图但控件还是灰的"）。
@@ -848,20 +866,21 @@ js/
 
 > 脚手架在仓库**之外**（`F:\claudeapp\demo\.pindou-devtools\`，刻意不污染零依赖交付物）。
 
-#### 模块清单（步骤 5 的产出 = 18 个；现 20 个）
+#### 模块清单（步骤 5 的产出 = 18 个；现 24 个）
 
 ```
-js/core/     dom.js      state.js     serialize.js                       ← 3（serialize.js 为 6a 新增）
-js/input/    camera.js   upload.js                                    ← 2
-js/viewer/   viewer.js   selection.js   panzoom.js                    ← 3
-js/pipeline/ render.js   simplify.js   grid.js                        ← 3
-js/output/   preview.js  stats.js      export.js    print.js          ← 4（print.js 为后续新增）
-js/ui/       a11y.js     grid-select.js  loading.js  install.js       ← 4
+js/core/     dom.js      state.js     serialize.js   storage.js          ← 4（serialize 6a / storage 6b）
+js/input/    camera.js   upload.js                                        ← 2
+js/viewer/   viewer.js   selection.js   panzoom.js                      ← 3
+js/pipeline/ render.js   simplify.js   grid.js        edit.js           ← 4（edit.js 为 6c/6d 新增）
+js/output/   preview.js  stats.js      export.js      print.js          ← 4（print.js 为后续新增）
+js/ui/       a11y.js     grid-select.js  library.js   edit-ui.js
+             loading.js  install.js                                     ← 6（library 6b / edit-ui 6c/6d）
 js/main.js   ← 模块入口（静态 import 拉起整张图）                        ← 1
-                                                  合计 20 个 js/ 模块
+                                                  合计 24 个 js/ 模块
 ```
 > `color-palette.js` 在仓库根目录（不属于 `js/`），入口亦可达 ——
-> `probe-verify-entry-chain.js` 报的"共 21 个节点"即 20 + 它。
+> `probe-verify-entry-chain.js` 报的"共 25 个节点"即 24 + 它。
 
 > ⚠️ **ESM 后「加载顺序不能颠倒」这条约束已消失** ——
 > 依赖顺序由各模块的 `import` 语句表达，ESM 解析器负责拓扑排序。
